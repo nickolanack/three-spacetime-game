@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 
+
+import { ChunkEngine } from './chunks';
+
+import * as Blockly from 'blockly';
+import { toolbox } from './blockly/toolbox';
+
 let camera, scene, renderer, controls;
 let sun, skyUniforms;
 let wireframe;
@@ -10,8 +16,15 @@ let direction = new THREE.Vector3();
 let clock = new THREE.Clock();
 
 
+
+const chunks=new ChunkEngine();
+
+let pointerTarget;
+
+
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(0, 0); // center of screen
+
 
 let velocityY = 0;
 let isOnGround = true;
@@ -34,7 +47,7 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xaaaaaa);
 
-
+  
 
 
   loadTextures();
@@ -55,12 +68,18 @@ function init() {
 
   const grid = new THREE.GridHelper(2000, 100, 0x000000, 0x000000);
   grid.material.opacity = 0.2;
+  grid.material.linewidth = 2;
   grid.material.transparent = true;
   scene.add(grid);
 
   camera.position.y = 2;
 
   renderer = new THREE.WebGLRenderer();
+
+
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
@@ -111,6 +130,21 @@ function init() {
       case 'ShiftLeft': crouch = false; break;
     }
   };
+
+
+
+    
+  const onClick =(event) => {
+    if (event.button !== 0) return; // left click only
+
+    if(pointerTarget){
+       scene.remove(pointerTarget);
+    }
+
+   
+  }
+
+  document.addEventListener('mousedown', onClick);
 
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
@@ -169,7 +203,7 @@ function animate() {
   }
 
   animateSky();
-  lookingAt()
+  // lookingAt()
 
 
 
@@ -187,29 +221,26 @@ function animate() {
 function loadTextures(){
   // Load textures
   const loader = new THREE.TextureLoader();
-  const textures = [
-    loader.load('/textures/grass_side.png'), // px
-    loader.load('/textures/grass_side.png'), // nx
-    loader.load('/textures/grass_top.png'),  // py
-    loader.load('/textures/dirt.png'),       // ny
-    loader.load('/textures/grass_side.png'), // pz
-    loader.load('/textures/grass_side.png'), // nz
+  const paths = [
+   '/textures/grass_side.png', // px
+    '/textures/grass_side.png', // nx
+    '/textures/grass_top.png',  // py
+   '/textures/grass_side.png',  // ny
+    '/textures/grass_side.png', // pz
+    '/textures/grass_side.png', // nz
   ];
-
-  const grassMaterials = textures.map(texture => new THREE.MeshBasicMaterial({ map: texture }));
-
-  // Create block
-  const block = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    grassMaterials
-  );
-
-  // Position it above the ground
-  block.position.y = 0.5;
-
-  scene.add(block);
+  // const textures = paths.map(p=>loader.load(p));
+  // const grassMaterials = textures.map(texture => new THREE.MeshBasicMaterial({ map: texture }));
+  
+  addBlocks(paths);
 }
 
+
+function addBlocks(materials){
+
+  chunks.buildChunkMesh(chunks.generateChunk(0,0,0), materials, scene);
+  
+}
 
 
 function addSky(){
@@ -306,6 +337,9 @@ function lookingAt(){
     const obj = intersect.object;
     
     if (obj.geometry instanceof THREE.BoxGeometry) {
+
+      pointerTarget=obj
+
       wireframe.position.copy(obj.position);
       wireframe.visible = true;
       blockFound = true;
@@ -315,5 +349,25 @@ function lookingAt(){
 
   if (!blockFound) {
     wireframe.visible = false;
+    pointerTarget=null;
   }
 }
+
+
+
+
+
+const blocklyDiv = document.getElementById('blocklyDiv') as HTMLElement;
+
+const workspace = Blockly.inject(blocklyDiv, {
+  toolbox: toolbox as any,
+  collapse: false,
+  comments: true,
+  disable: false,
+  maxBlocks: Infinity,
+  trashcan: true,
+  horizontalLayout: false,
+  toolboxPosition: 'start',
+  css: true,
+  media: 'https://unpkg.com/blockly/media/',
+});
