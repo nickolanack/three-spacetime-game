@@ -1,98 +1,74 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { PixelMesh } from './PixelMesh';
+
 export class Item {
 
-    constructor(scene, asset:string, x:number, y:number, z:number, depth?:number) {
+    constructor(scene, asset: string, x: number, y: number, z: number, depth?: number, opt?: any) {
 
-        if(typeof depth=='undefined'){
-            depth=4;
+        if (typeof depth != 'number') {
+            depth = 4;
         }
 
-        const image = new Image();
-        image.src = asset;
-        image.onload = () => {
-            const mask = this.getPixelMask(image);
-            const geometry = this.createExtrudedGeometryFromMask(mask, depth);
-            const material = new THREE.MeshStandardMaterial({
-                vertexColors: true,
-                roughness: 0.4,
-                metalness: 0,
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            scene.add(mesh);
-            mesh.scale.set(1 / 64, 1 / 64, 1 / 64)
+        if (typeof opt == 'undefined') {
+
+            if (typeof depth == 'object') {
+                opt = depth;
+            } else {
+                opt = {};
+            }
+        }
+
+
+        (async () => {
+
+            const {mesh} = await (new PixelMesh()).createFromAsset(asset, depth);
+            const rand = this._mulberry32(parseInt(`${x}${y}${z}`));
+
+            const scale = 2 + Math.floor(rand() * 3 - 1);
+
+            mesh.scale.set(scale / 128, scale / 128, scale / 128)
             mesh.position.set(x, y, z);
+            scene.add(mesh);
 
-        };
+
+            const cloneCount = Math.floor(rand() * (opt.maxClones ?? 3)); // 0 to 3
+
+            for (let i = 0; i < cloneCount; i++) {
+                const clone = mesh.clone();
+
+                // Optionally: clone the geometry if you need independent transforms
+                clone.geometry = clone.geometry.clone();
+
+                // Set position (e.g., same as original or slightly offset)
+                clone.position.set(x + (rand() - 0.8), y, z + (rand() - 0.5)); // or add slight random offset if desired
+
+                const scale = 2 + Math.floor(rand() * 3 - 1);
+                clone.scale.set(scale / 128, scale / 128, scale / 128);
+
+                clone.rotation.set(
+                    0,
+                    rand() * Math.PI * 2,
+                    0
+                );
+
+                scene.add(clone);
+            }
+
+        })();
+
 
     }
 
 
-    getPixelMask(image: HTMLImageElement): boolean[][] {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d')!;
-        canvas.width = image.width;
-        canvas.height = image.height;
-        ctx.drawImage(image, 0, 0);
 
-        const imageData = ctx.getImageData(0, 0, image.width, image.height);
-        const data = imageData.data;
-
-        const mask: (THREE.Color|null)[][] = [];
-
-        for (let y = 0; y < image.height; y++) {
-            const row: (THREE.Color|null)[] = [];
-            for (let x = 0; x < image.width; x++) {
-                const index = (y * image.width + x) * 4;
-                const alpha = data[index + 3]; // 0-255
-
-                let color = null;
-                if (alpha > 0) {
-                    const r = data[index];
-                    const g = data[index + 1];
-                    const b = data[index + 2];
-                    color = new THREE.Color(`rgb(${r}, ${g}, ${b})`);
-
-                }
-
-
-
-                row.push(alpha > 0 ? color : null);
-            }
-            mask.push(row);
+    _mulberry32(a) {
+        return function () {
+            let t = a += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
         }
-
-        return mask;
-    }
-
-    createExtrudedGeometryFromMask(mask: (THREE.Color|null)[][], depth = 1): THREE.BufferGeometry {
-        const geometries: THREE.BufferGeometry[] = [];
-
-        const h = mask.length;
-        const w = mask[0].length;
-
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                if (mask[y][x]) {
-                    // Create a thin box for this pixel
-                    const geom = new THREE.BoxGeometry(1, 1, depth);
-                    const color=mask[y][x];
-                    const colorAttr = new Float32Array(geom.attributes.position.count * 3);
-                    for (let i = 0; i < colorAttr.length; i += 3) {
-                        colorAttr[i] = color.r;
-                        colorAttr[i + 1] = color.g;
-                        colorAttr[i + 2] = color.b;
-                    }
-                    geom.setAttribute('color', new THREE.BufferAttribute(colorAttr, 3));
-                  
-                    // Position it
-                    geom.translate(x + 0.5, h - y - 0.5, depth / 2); // shift to center of pixel, flip Y
-                    geometries.push(geom);
-                }
-            }
-        }
-
-        return BufferGeometryUtils.mergeGeometries(geometries);
     }
 
 
