@@ -3,9 +3,11 @@ import * as THREE from 'three';
 export class Environment {
 
     scene;
+    sky;
     skyUniforms;
     sun;
     light;
+    groundMaterial;
 
     constructor(scene) {
 
@@ -17,6 +19,21 @@ export class Environment {
 
     }
 
+
+    addGround() {
+
+
+        this.groundMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: false });
+
+
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(2000, 2000),
+            this.groundMaterial
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        this.scene.add(ground);
+    }
 
 
     addSky() {
@@ -47,11 +64,11 @@ export class Environment {
             depthWrite: false,
         });
 
-        const sky = new THREE.Mesh(
-            new THREE.SphereGeometry(500, 32, 15),
+        this.sky = new THREE.Mesh(
+            new THREE.SphereGeometry(400, 32, 15),
             skyMat
         );
-        this.scene.add(sky);
+        this.scene.add(this.sky);
     }
 
 
@@ -64,6 +81,7 @@ export class Environment {
 
 
     render() {
+        this.addGround();
         this.addSky();
         this.addSun();
 
@@ -75,15 +93,21 @@ export class Environment {
     }
 
 
-    animate(clock) {
+    animate(clock, position) {
+
+
+        this.sky.position.set(position.x, 0, position.z)
 
         const time = clock.getElapsedTime();
-        const t = (Math.sin(time * 0.01) + 1) / 2; // oscillates between 0 and 1
+        let t = (Math.sin(time * 0.01) + 1) / 2; // oscillates between 0 and 1
+
+        // const shaped = Math.pow((Math.sin(time) + 1) / 2, 4); // 4 = more flattening
+        // let t=shaped
 
         // Define day/night colors
         const dayTop = new THREE.Color(0x87ceeb);    // Sky blue
         const nightTop = new THREE.Color(0x00001a);  // Midnight blue
-        const dayBottom = new THREE.Color(0xfdf6e3); // Warm horizon
+        const dayBottom = new THREE.Color(0xffffff); //(0xfdf6e3); // Warm horizon
         const nightBottom = new THREE.Color(0x000000); // Ground
 
         // Interpolate sky colors
@@ -95,15 +119,11 @@ export class Environment {
         this.sun.color.lerpColors(new THREE.Color(0x444488), new THREE.Color(0xffffff), t);
 
         this.light.color.lerpColors(nightTop, dayTop, t);
-        this.light.groundColor.lerpColors(nightBottom, dayBottom, t);
-
-
-        const dayFog = new THREE.Color(0xfdf6e3);    // Warm fog for day
-        const nightFog = new THREE.Color(0x000000);  // Dark fog for night
-
-        // Interpolate fog color
-
-        this.scene.fog.color.copy(this.skyUniforms.bottomColor.value);
+        // this.light.groundColor.lerpColors(nightBottom, dayBottom, t);
+        const bottomColor = new THREE.Color().lerpColors(nightBottom, dayBottom, t);
+        this.light.groundColor.copy(bottomColor); // already doing this
+        this.groundMaterial.color.copy(bottomColor);  
+        this.scene.fog.color.copy(bottomColor);
 
     }
 
