@@ -1,10 +1,12 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
+import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 export class Controls {
 
     controls: PointerLockControls;
     camera;
     scene;
+
+    enabled = false;
 
     moveForward = false;
     moveBackward = false;
@@ -25,6 +27,7 @@ export class Controls {
 
     lastForwardTap = 0
     isRunning = false;
+    isInWater = false;
 
     gravity = -30;
     jumpStrength = 10;
@@ -42,7 +45,7 @@ export class Controls {
     constructor(camera: THREE.PerspectiveCamera, scene: THREE.Scene, chunks) {
         this.camera = camera;
         this.scene = scene;
-        this.chunks=chunks;
+        this.chunks = chunks;
 
         this.controls = new PointerLockControls(camera, document.body);
         const instructions = document.getElementById('instructions');
@@ -56,14 +59,39 @@ export class Controls {
         });
 
         this.controls.addEventListener('lock', () => {
+            this.enabled = true;
             instructions.style.display = 'none';
         });
         this.controls.addEventListener('unlock', () => {
+            this.enabled = false;
             instructions.style.display = 'flex';
         });
 
+        let rot = 0
+        this.controls.addEventListener('change', function () {
+            let newRot = camera.rotation.y;
+            // console.log(newRot - rot);
+            let diff = newRot - rot;
+            let right = 0;
+            let left = 0;
+            if (diff > 0) {
+                right=Math.min(Math.floor(diff*50*800), 255);
+            }
+            if (diff < 0) {
+                left=Math.min(Math.floor(-diff*50*800), 255);
+            }
+            let el=document.getElementById('mouse')
+            el.style.cssText=`--left:${left}; --right:${right};`;
+           
 
-        scene.add(this.controls.getObject());
+            rot = newRot;
+
+
+        });
+
+
+
+        scene.add(this.controls.object);
 
 
 
@@ -78,6 +106,8 @@ export class Controls {
                 case 'ArrowUp':
                 case 'KeyW':
 
+                    document.getElementById('key-w').classList.add('selected');
+
                     this.moveForward = true;
                     const now = performance.now();
                     if (now - this.lastForwardTap < 150) { // Double tap detected (within 300ms)
@@ -85,17 +115,36 @@ export class Controls {
                     }
                     break;
                 case 'ArrowLeft':
-                case 'KeyA': this.moveLeft = true; break;
+                case 'KeyA':
+
+                    document.getElementById('key-a').classList.add('selected');
+
+                    this.moveLeft = true; break;
                 case 'ArrowDown':
-                case 'KeyS': this.moveBackward = true; break;
+                case 'KeyS':
+
+                    document.getElementById('key-s').classList.add('selected');
+
+                    this.moveBackward = true; break;
                 case 'ArrowRight':
-                case 'KeyD': this.moveRight = true; break;
-                case 'ShiftLeft': this.isCrouching = true; break;
+                case 'KeyD':
+
+                    document.getElementById('key-d').classList.add('selected');
+
+                    this.moveRight = true; break;
+                case 'ShiftLeft':
+
+                    document.getElementById('key-shift').classList.add('selected');
+
+                    this.isCrouching = true; break;
             }
 
 
 
             if (event.code === 'Space') {
+
+                document.getElementById('key-space').classList.add('selected');
+
                 const now = performance.now();
                 if (now - this.lastSpaceTap < 300) { // Double tap detected (within 300ms)
                     this.isFlying = !this.isFlying;
@@ -108,7 +157,7 @@ export class Controls {
                 }
             }
 
-            if (event.code === 'Space' && this.isOnGround) {
+            if (event.code === 'Space' && (this.isOnGround || this.isInWater)) {
 
                 this.velocityY = this.jumpStrength;
                 this.isOnGround = false;
@@ -119,21 +168,44 @@ export class Controls {
             switch (event.code) {
                 case 'ArrowUp':
                 case 'KeyW':
+
+                    document.getElementById('key-w').classList.remove('selected');
+
                     this.moveForward = false;
                     const now = performance.now();
                     this.lastForwardTap = now;
                     this.isRunning = false;
                     break;
                 case 'ArrowLeft':
-                case 'KeyA': this.moveLeft = false; break;
+                case 'KeyA':
+
+                    document.getElementById('key-a').classList.remove('selected');
+
+                    this.moveLeft = false; break;
                 case 'ArrowDown':
-                case 'KeyS': this.moveBackward = false; break;
+                case 'KeyS':
+
+                    document.getElementById('key-s').classList.remove('selected');
+
+                    this.moveBackward = false; break;
                 case 'ArrowRight':
-                case 'KeyD': this.moveRight = false; break;
-                case 'ShiftLeft': this.isCrouching = false; break;
+                case 'KeyD':
+
+                    document.getElementById('key-d').classList.remove('selected');
+
+                    this.moveRight = false; break;
+                case 'ShiftLeft':
+
+                    document.getElementById('key-shift').classList.remove('selected');
+
+                    this.isCrouching = false; break;
             }
 
             if (event.code === 'Space') {
+
+
+                document.getElementById('key-space').classList.remove('selected');
+
                 const now = performance.now();
                 this.lastSpaceTap = now;
                 this.moveUp = false;
@@ -156,15 +228,19 @@ export class Controls {
 
 
 
-    animate(clock) {
+    animate(delta) {
 
-        const delta = clock.getDelta();
+       
         let speed = this.playerSpeed;
         if (this.isRunning) {
             speed = speed * 2;
         }
         if (this.isCrouching) {
             speed = speed / 2;
+        }
+
+        if (this.isInWater) {
+            speed = this.playerSpeed / 3;
         }
 
         this.velocity.x -= this.velocity.x * this.speedDamp * delta;
@@ -193,39 +269,42 @@ export class Controls {
         }
 
 
-        const last=[this.camera.position.x, this.camera.position.z];
+        const last = [this.camera.position.x, this.camera.position.z];
 
         this.controls.moveRight(-this.velocity.x * delta);
         this.controls.moveForward(-this.velocity.z * delta);
 
-        if(this.isOnGround&&(!this.isFlying)){
-            let {g} = this.chunks.fromWorld(this.camera.position);
+        let { g, type } = this.chunks.fromWorld(this.camera.position);
 
-            const maxVert=this.isCrouching?0:1
 
-            const vert=g-this.groundLevel;
-            if(vert>maxVert){
-                console.log(vert)
-                this.camera.position.x=last[0];
-                this.camera.position.z=last[1]
-                
-            }
-            if(vert<-maxVert){
-                if(this.isCrouching){
-
-                }else{
-                    console.log(vert)
-                    this.isOnGround=false;
-                }
-               
-            }
+        if (type == 'water' && (!this.isInWater) && (!this.isOnGround)) {
+            this.velocityY = 0
         }
 
-        // if (this.moveUp || this.moveDown) {
-        //     // this.controls.moveUp(this.velocity.y * delta);
-        //     console.log(`up: ${this.velocity.y * delta}`)
+        this.isInWater = type == 'water';
 
-        // }
+
+
+        if (this.isOnGround && (!this.isFlying)) {
+            let { g } = this.chunks.fromWorld(this.camera.position);
+
+            const maxVert = this.isCrouching ? 0 : 1
+
+            const vert = g - this.groundLevel;
+            if (vert > maxVert) {
+                this.camera.position.x = last[0];
+                this.camera.position.z = last[1]
+
+            }
+            if (vert < -maxVert) {
+                if (this.isCrouching) {
+
+                } else {
+                    this.isOnGround = false;
+                }
+
+            }
+        }
 
         if (this.isFlying) {
             this.camera.position.y -= this.velocity.y * delta;
@@ -234,7 +313,14 @@ export class Controls {
 
 
         if (!this.isOnGround) {
-            this.velocityY += this.gravity * delta;
+            let gravity = this.gravity;
+            if (this.isInWater && this.velocityY < 0) {
+                gravity = gravity / 20;
+            }
+            this.velocityY += gravity * delta;
+
+
+
             this.camera.position.y += this.velocityY * delta;
 
             // Clamp to ground
