@@ -1,15 +1,32 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-
+import { Item } from './Item';
+import { BlockAtlas } from './BlockAtlas';
+import { ChunkDB } from './ChuckDB';
 
 type BlockType = number; // 0 = air, 1 = dirt, 2 = grass
 
 
-import EventEmitter from 'eventemitter3';
+import BlockFaces from './blocks.json';
+
+
+type Chunk = number[][][] & {
+    mesh?: THREE.Mesh;
+    water?: THREE.Mesh;
+    leaves?: THREE.Mesh;
+    assets?: THREE.Group;
+    key?: string,
+    features?: boolean
+    _throttle?: any
+};
+
+
 import { Generators } from './Generators';
 
+import EventEmitter from 'eventemitter3';
+import { ChunkLoader } from './ChunkLoader';
 type MyEvents = {
-    'chunk:update': { from: string; to: string };
+    'activechunk:update': { from: string; to: string };
 };
 
 export class ChunkEngine extends EventEmitter<MyEvents> {
@@ -17,15 +34,26 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
 
     chunkSize;
-    world: Record<string, BlockType[][][]>
+
+
+    world: Record<string, Chunk>
+
     scene;
 
+    blockAtlas;
+
+
+    //deprecated
     atlas;
     faces;
     uvs;
 
     types;
+
+
     generator;
+    database;
+
 
     current;
 
@@ -40,25 +68,35 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
         this.chunkSize = 16;
         this.world = {};
 
-        this.generator=new Generators(this);
 
+        this.generator = new Generators(this);
+        this.database = new ChunkDB();
 
+       
 
+    }
 
+    mulberry32(a) {
+        return function () {
+            let t = a += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        }
     }
 
 
 
-    getSquareNeighbourChunks(cx, cy, cz, distance) {
+    getSquareNeighbourChunks(cx: number, cy: number, cz: number, distance: number) {
 
         let dist = typeof distance == 'number' ? distance : 1;
-
+        dist = Math.ceil(dist);
         const neighbours = [];
 
         for (let x = -dist; x <= dist; x++) {
             for (let y = -dist; y <= dist; y++) {
                 for (let z = -dist; z <= dist; z++) {
-                    neighbours.push({ key: `${cx + x},${cy + y},${z}`, cx: cx + x, cy: cy + y, cz: cz + z })
+                    neighbours.push({ key: `${cx + x},${cy + y},${cz + z}`, cx: cx + x, cy: cy + y, cz: cz + z })
                 }
             }
         }
@@ -69,19 +107,64 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
     }
 
-    getRadialNeighbourChunks(cx_, cy_, cz_, distance) {
+    getSquareOutsideChunks(cx: number, cy: number, cz: number, distance: number) {
+
+        throw 'Not implemented'
+
+    }
+    getSquareNeighbourBlocks(wx: number, wy: number, wz: number, distance: number) {
+
+        let dist = typeof distance == 'number' ? distance : 1;
+        dist = Math.ceil(dist);
+        const neighbours = [];
+
+        for (let x = -dist; x <= dist; x++) {
+            for (let y = -dist; y <= dist; y++) {
+                for (let z = -dist; z <= dist; z++) {
+                    neighbours.push({ wx: wx + x, wy: wy + y, wz: wz + z })
+                }
+            }
+        }
+
+
+
+        return neighbours;
+
+    }
+
+    getRadialNeighbourChunks(cx_: number, cy_: number, cz_: number, distance: number) {
 
         const d2 = distance ** 2;
         const neighbours = this.getSquareNeighbourChunks(cx_, cy_, cz_, distance);
-        return neighbours.filter(({ cx, cy, cz }) => Math.pow(cx - cx_, 2) + Math.pow(cy - cy_, 2) + Math.pow(cz - cz_, 2) < d2);
+        return neighbours.filter(({ cx, cy, cz }) => Math.pow(cx - cx_, 2) + Math.pow(cy - cy_, 2) + Math.pow(cz - cz_, 2) <= d2);
+    }
+
+    getRadialOutsideChunks(cx_: number, cy_: number, cz_: number, distance: number) {
+
+        const d2 = distance ** 2;
+        return Object.keys(this.world).map(key => {
+            const { cx, cy, cz } = this.fromKey(key);
+            return { key, cx, cy, cz };
+        }).filter(({ cx, cy, cz }) => Math.pow(cx - cx_, 2) + Math.pow(cy - cy_, 2) + Math.pow(cz - cz_, 2) > d2);
+    }
+
+    getRadialNeighbourBlocks(wx_: number, wy_: number, wz_: number, distance: number) {
+
+        const d2 = distance ** 2;
+        const neighbours = this.getSquareNeighbourBlocks(wx_, wy_, wz_, distance);
+        return neighbours.filter(({ wx, wy, wz }) => Math.pow(wx - wx_, 2) + Math.pow(wy - wy_, 2) + Math.pow(wz - wz_, 2) <= d2);
     }
 
 
     clickableMeshesNearby(pos) {
 
         const { cx, cy, cz } = this.fromWorld(pos);
-        const neighbours = this.getSquareNeighbourChunks(cx, cy, cz, 1).filter(({ key }) => !!this.world[key]);
-        return neighbours.map(({ key }) => this.world[key].mesh); //.concat(Object.values(this.world).map(c => c.water));
+        const neighbours = this.getSquareNeighbourChunks(cx, cy, cz, 1.5).filter(({ key }) => !!this.world[key]);
+        return neighbours.map(({ key }) => {
+            return this.world[key].mesh
+        }).filter(mesh => !!mesh).concat(neighbours.map(({ key }) => {
+            return this.world[key].leaves
+        }).filter(mesh => !!mesh));
 
     }
 
@@ -92,185 +175,213 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
     }
 
-    generateChunkXZ(cx: number, cz: number) {
+    async generateChunkXZTerrain(cx: number, cz: number) {
 
 
-        const chunk: BlockType[][][] = [];
-
+        const chunk: Chunk = this.generateEmptyChunk()
+        this.world[`${cx},0,${cz}`] = chunk;
 
 
         this.generator.raise(cx, cz, {
-            height: 2,
+            height: 3,
             type: 'mantle'
         })
-    
-        
+
+        const seed = 25;
 
         this.generator.addPerlin(cx, cz, {
-            seed:99,
+            seed: seed,
             scale: 0.005,
-            height: 20,
+            height: 5,
+            type: 'mantle'
+        })
+
+
+
+        this.generator.addPerlin(cx, cz, {
+            seed: seed,
+            scale: 0.005,
+            height: 22,
+            type: 'stone'
+        })
+        this.generator.raise(cx, cz, {
+            height: 1,
+            type: 'dirt'
+        })
+
+
+        this.generator.insetPerlin(cx, cz, {
+            seed: seed + 1,
+            scale: 0.1,
+            height: 13,
+            sub: 4,
+            type: 'lava'
+        })
+
+        this.generator.raise(cx, cz, {
+            height: 1,
+            type: 'dirt'
+        })
+
+        this.generator.raise(cx, cz, {
+            height: 1,
+            type: 'dirt'
+        })
+
+        this.generator.addPerlin(cx, cz, {
+            seed: seed,
+            scale: 0.005,
+            height: 3,
             type: 'stone'
         })
 
 
-        for(let i=0; i<1;i++){
+        for (let i = 0; i < 1; i++) {
             this.generator.insetPerlin(cx, cz, {
-                seed: 1*i,
+                seed: 1 * i,
                 scale: 0.1,
-                height: 10,
+                height: 11,
                 sub: 4,
                 type: 'gold'
             })
 
             this.generator.insetPerlin(cx, cz, {
-                seed: 2*i,
+                seed: 2 * i,
                 scale: 0.1,
-                height: 10,
+                height: 11,
                 sub: 5,
                 type: 'diamond'
             })
 
 
             this.generator.insetPerlin(cx, cz, {
-                seed: 3*i,
+                seed: 3 * i,
                 scale: 0.1,
-                height: 10,
+                height: 11,
                 sub: 4,
                 type: 'gem'
             })
 
 
-            
+
         }
 
         this.generator.addPerlin(cx, cz, {
-            seed:99,
+            seed: seed,
             scale: 0.005,
             height: 20,
-            sub:14,
-            extrude:4,
+            sub: 14,
+            extrude: 4,
             type: 'stone'
         })
 
         this.generator.addPerlin(cx, cz, {
-            seed:99,
+            seed: 99,
             scale: 0.005,
             height: 18,
-            sub:15,
-            extrude:2,
+            sub: 15,
+            extrude: 2,
             type: 'stone'
         })
 
-       
+
 
         this.generator.add(cx, cz, {
-            height: (wy)=>{ 
-                return wy<10?1:0; 
-            }, 
+            height: (wy) => {
+                return wy < 10 ? 1 : 0;
+            },
             type: 'mantle'
         })
 
         this.generator.add(cx, cz, {
-            height: (wy)=>{ 
-                return wy>12?1:0; 
-            }, 
+            height: (wy) => {
+                return wy > 12 ? 1 : 0;
+            },
             type: 'dirt'
+        })
+
+        this.generator.add(cx, cz, {
+            height: (wy, type) => {
+                return wy < 11 ? 1 : 0 //||type==this.getTypeId('stone')?
+            },
+            inset: 1,
+            type: 'sand'
         })
 
         this.generator.insetPerlin(cx, cz, {
-                seed: 89,
-                scale: 0.2,
-                height: (wy)=>{ 
-                    return wy<11?15:0; 
-                }, 
-                sub: 4,
-                type: 'mantle'
-            })
-
-        // this.generator.raise(cx, cz, {
-        //     height: 10,
-        //     type: 'water'
-        // })
-
-        // this.generator.add(cx, cz, {
-        //     height: (wy)=>{ 
-        //         return 5/Math.max(1, wy/3); 
-        //     }, 
-        //     type: 'dirt'
-        // })
-
-
-
-
-        /*
-       
-
-        
-
-        
-
-
-        this.generator.addPerlin(cx, cz, {
-            seed: 3,
-            scale: 0.1,
-            height: 10,
-            sub: 4,
-            type: 'wood'
-        })
-
-
-   
-
-        this.generator.addPerlin(cx, cz, {
-            height: 4,
-            type: 'stone'
-        })
-
-        this.generator.raise(cx, cz, {
-            height: 6,
+            seed: 89,
+            scale: 0.2,
+            height: (wy) => {
+                return wy < 11 ? 15 : 0;
+            },
+            sub: 3,
             type: 'dirt'
         })
 
-
-        this.generator.subPerlin(cx, cz, {
-            height: 5,
-            sub: 2,
-            extrude: 8,
-            invert: true
-        })
-
         this.generator.raise(cx, cz, {
-            height: 5,
+            height: 8,
             type: 'water'
         })
 
+    }
+    async generateChunkXZFeatures(cx: number, cz: number) {
 
+        this.world[`${cx},0,${cz}`].features = true;
 
-
-
-
-
-       
-
-        this.generator.addPerlin(cx, cy, {
-
-            scale: 0.1,
-            height: 10,
-            sub: 4,
-            type: 9
+        this.generator.addRandom(cx, cz, {
+            probability: 0.03,
+            height: (wy, type) => {
+                return type == this.getTypeId('dirt') ? Math.round(2 + Math.random()) : 0
+            },
+            type: 'wood',
+            ignoreWater: false
         })
-        */
+
+
+        this.generator.addRandom(cx, cz, {
+            probability: 0.03,
+            height: (wy, type) => {
+                return type == this.getTypeId('stone') ? 1 : 0
+            },
+            type: 'slime',
+            ignoreWater: false
+        })
+
+        this.generator.addRandom(cx, cz, {
+            probability: 0.01,
+            height: (wy, type) => {
+                return type == this.getTypeId('dirt') ? Math.round(2 + Math.random()) : 0
+            },
+            type: 'birtch',
+            ignoreWater: false
+        })
+
+
+        this.generator.setLeaves(cx, cz);
         this.generator.setGrassTop(cx, cz);
+        this.generator.grow('grass', cx, cz, {
+            probability: 0.05,
+        });
+
+        this.generator.grow('wheat', cx, cz, {
+            probability: 0.01,
+        });
+
+        this.generator.growSeaweed(cx, cz, {
+            probability: 0.05,
+        });
+
+
     }
 
 
 
 
-    buildChunkMesh(chunk: BlockType[][][], cx: number, cy: number, cz: number) {
+    buildChunkMesh(chunk: Chunk, cx: number, cy: number, cz: number) {
 
         const key = `${cx},${cy},${cz}`;
         this.world[key] = chunk;
+        chunk.key = `${cx},${cy},${cz}`
 
         this.updateChunkMesh(chunk);
 
@@ -278,51 +389,122 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
         chunk.mesh.position.set(cx * this.chunkSize, cy * this.chunkSize, cz * this.chunkSize);
         chunk.water.position.copy(chunk.mesh.position);
+        chunk.leaves.position.copy(chunk.mesh.position);
+        chunk.assets.position.copy(chunk.mesh.position);
+
         return chunk.mesh;
 
 
 
     }
 
-    updateChunkMesh(chunk: BlockType[][][]) {
+    needsUpdateChunkMesh(chunk: Chunk) {
+
+        if (chunk._throttle) {
+            clearTimeout(chunk._throttle);
+        }
+
+        chunk._throttle = setTimeout(() => {
+            delete chunk._throttle;
+            this.updateChunkMesh(chunk);
+        }, 1);
+
+    }
+
+    updateChunkMesh(chunk: Chunk) {
+
+        console.log(`Update Chunk Mesh: ${chunk.key}`)
 
         const solidGeometries: THREE.BufferGeometry[] = [];
         const waterGeometries: THREE.BufferGeometry[] = [];
+        const leavesGeometries: THREE.BufferGeometry[] = [];
+        const assetGeometries: THREE.Group = new THREE.Group();
 
         for (let x = 0; x < this.chunkSize; x++) {
-            for (let y = 0; y < this.chunkSize; y++) {
-                for (let z = 0; z < this.chunkSize; z++) {
+            for (let z = 0; z < this.chunkSize; z++) {
+                for (let y = this.chunkSize - 1; y >= 0; y--) {
                     const type = chunk[x][y][z];
                     if (type !== 0) {
-                        const geom = this.createTexturedBox(this.faces, this.uvs, type - 1)
+
+
+                        let geom = this.blockAtlas.createTexturedBoxVariation(type, parseInt(`${x}${y}${z}`));
+
+                        if (type == this.getTypeId('grass_item')) {
+
+                            new Item(assetGeometries, 'grass.png', x, y, z, 2, {});
+                            continue;
+
+                        } else {
+
+                        }
+
+                        if (type == this.getTypeId('wheat_item')) {
+
+                            new Item(assetGeometries, 'wheat.png', x, y, z, 2, { maxClones: 0 });
+                            continue;
+
+                        } else {
+
+                        }
+
+                        if (type == this.getTypeId('sword_item')) {
+
+                            new Item(assetGeometries, 'wood_sword.png', x, y, z, 2, { maxClones: 0, scale: [1, 1] });
+                            continue;
+
+                        } else {
+
+                        }
+
 
 
                         geom.translate(x, y + 0.5, z);
-                        if (type == 8 || type == 9) {
-                            waterGeometries.push(geom)
-                            if (type == 9) {
-                                waterGeometries.push(geom.clone().scale(0.5, 0.5, 0.5))
+                        if (type == this.getTypeId('water')) {
+
+                            if (y >= this.chunkSize - 1 || chunk[x][y + 1][z] != type) {
+                                // if((!chunk.key)||this.getBlock(chunk.key, x, y+1, z)!=this.getTypeId('water')){
+                                waterGeometries.push(geom)
                             }
-                        } else {
-                            solidGeometries.push(geom);
+
+
+                            continue;
+
+
+
                         }
+
+                        if (type == this.getTypeId('leaves')) {
+                            leavesGeometries.push(geom)
+                            continue;
+                        }
+
+
+                        solidGeometries.push(geom);
+
                     }
                 }
             }
+
+
+            (async () => {
+
+                let data = this.getChunkData(chunk.key);
+                await this.database.setItem(chunk.key, data);
+                let current = await this.database.getItem(chunk.key)
+
+                if (JSON.stringify(current) !== JSON.stringify(data)) {
+                    throw 'Not consistent!';
+                }
+
+            })();
+
         }
 
         const solidMerged = solidGeometries.length > 0 ? mergeGeometries(solidGeometries, true) : (new THREE.BufferGeometry());
         const waterMerged = waterGeometries.length > 0 ? mergeGeometries(waterGeometries, true) : (new THREE.BufferGeometry());
+        const leavesMerged = leavesGeometries.length > 0 ? mergeGeometries(leavesGeometries, true) : (new THREE.BufferGeometry());
 
-        const material = new THREE.MeshStandardMaterial({
-            map: this.atlas,
-            transparent: true,
-            color: 0xffffff,       // base color, usually white if you use a texture
-            roughness: 0.5,        // controls glossiness (0 = shiny, 1 = matte)
-            metalness: 0.1
-
-            //  wireframe: true
-        });
+        const material = this.blockAtlas.getMaterial()
 
 
 
@@ -330,54 +512,109 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
         mesh.renderOrder = 0;
         const water = new THREE.Mesh(waterMerged, material);
         water.renderOrder = 1;
-        water.depthWrite = false;
+        const leaves = new THREE.Mesh(leavesMerged, material);
+        leaves.renderOrder = 2;
+
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
         water.castShadow = true;
         water.receiveShadow = true;
 
+        leaves.castShadow = true;
+        leaves.receiveShadow = true;
+
+        if (chunk.mesh) {
+            const position = chunk.mesh.position;
+            mesh.position.copy(position);
+            water.position.copy(position);
+            leaves.position.copy(position);
+            assetGeometries.position.copy(position);
+        }
+
+
         this.scene.add(mesh);
         this.scene.add(water);
+        this.scene.add(leaves);
+        this.scene.add(assetGeometries);
+
         if (chunk.mesh) {
 
 
             this.scene.remove(chunk.mesh);
             this.scene.remove(chunk.water);
+            this.scene.remove(chunk.leaves);
+            this.scene.remove(chunk.assets);
 
-            const oldMesh = chunk.mesh;
-            mesh.position.copy(oldMesh.position);
-            water.position.copy(mesh.position);
+
 
         }
         chunk.mesh = mesh;
         chunk.water = water;
+        chunk.leaves = leaves;
+        chunk.assets = assetGeometries;
 
         return mesh;
 
     }
 
-
-    takeBlock(key, x: number, y: number, z: number, type: BlockType): number {
-
-        if (this.getYNeighbourTypes(key, x, y, z).indexOf(8) >= 0) {
-            return this.setBlock(key, x, y, z, 8)
-
+    unloadChunk(key) {
+        let chunk = this.world[key];
+        if (!chunk) {
+            return;
         }
-        return this.setBlock(key, x, y, z, 0)
+
+        this.scene.remove(chunk.mesh);
+        this.scene.remove(chunk.water);
+        this.scene.remove(chunk.leaves);
+        this.scene.remove(chunk.assets);
+
+        delete this.world[key];
+
+    }
+
+    takeBlock(key, x: number, y: number, z: number): number {
+
+        let type;
+        if (this.getHorizontalNeighbourTypes(key, x, y, z).indexOf(this.getTypeId('water')) >= 0) {
+            type = this.setBlock(key, x, y, z, this.getTypeId('water'))
+        }
+
+
+        if (this.getBlock(key, x, y + 1, z) == this.getTypeId('grass_item')) {
+            this.setBlock(key, x, y + 1, z, this.getTypeId('air'))
+        }
+
+
+        type = this.setBlock(key, x, y, z, this.getTypeId('air'));
+
+        if (this.getTypeName(type) == 'grass') {
+            return this.getTypeId('dirt');
+        }
+
+        return type;
 
     }
 
     getNeighboursXZ(key, x, z) {
         return [[x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]]
     }
-    getYNeighbourTypes(key, x, y, z) {
+    getHorizontalNeighbourTypes(key, x, y, z) {
         return this.getNeighboursXZ(key, x, z).map((n) => {
             return this.getBlock(key, n[0], y, n[1]);
         })
     }
 
-    getBlock(key, x: number, y: number, z: number) {
+    getWorldBlock(wx: number, wy: number, wz: number) {
+        const { key, x, y, z } = this.fromWorldBlock(wx, wy, wz);
+        const chunk = this.world[key];
+        if (!chunk) {
+            return 0;
+        }
+        return chunk[x][y][z];
+
+    }
+    getBlock(key: string, x: number, y: number, z: number) {
 
 
 
@@ -444,285 +681,34 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
         if (!chunk) {
             return 0;
         }
-        const current = chunk[x][y][z];
+        const oldType = chunk[x][y][z];
         chunk[x][y][z] = type;
 
-        this.updateChunkMesh(chunk);
-        return current;
+        this.needsUpdateChunkMesh(chunk);
+        return oldType;
     }
 
-    getTypeName(type:number) {
-
-        if(type==0){
-            return 'air';
-        }
-        return this.types[type-1]
+    getTypeName(type: number) {
+        return this.blockAtlas.getTypeName(type);
     }
-    getTypeId(name:string|number) {
-
-        if(typeof name=='number'){
-            return name;
-        }
-
-        if(name=='air'){
-            return 0;
-        }
-
-        let index = this.types.indexOf(name);
-        if (index >= 0) {
-            index++; //air is 0
-        }
-
-        return index;
+    getTypeId(name: string | number) {
+        return this.blockAtlas.getTypeId(name);
     }
 
-    createTexturedBox(faces: string[], uvMap: Map<string, THREE.Vector4>, type: number) {
-        const geom = new THREE.BoxGeometry(1, 1, 1);
-        const uvAttr = geom.getAttribute('uv') as THREE.BufferAttribute;
-
-        // 6 faces × 2 triangles × 3 vertices = 36 vertices, 12 uv coords per face (4 vertices * 2 coords)
-        const faceVertexUvs = [
-            0, // px
-            1, // nx
-            2, // py
-            3, // ny
-            4, // pz
-            5  // nz
-        ];
-
-        for (let face = 0; face < 6; face++) {
-            const texture = faces[face + type * 6];
-            const uvRect = uvMap.get(texture); // Vector4(uMin, vMin, uMax, vMax)
-            if (!uvRect) continue;
-
-            const uvIndex = face * 4;
-            const [u0, v0, u1, v1] = [uvRect.x, uvRect.y, uvRect.z, uvRect.w];
-
-            // Match vertex order expected by BoxGeometry
-            uvAttr.setXY(uvIndex + 1, u1, v1); // top-right
-            uvAttr.setXY(uvIndex + 0, u0, v1); // top-left
-            uvAttr.setXY(uvIndex + 2, u0, v0); // bottom-left
-            uvAttr.setXY(uvIndex + 3, u1, v0); // bottom-right
-        }
-        // console.log(geom.getAttribute('uv').array);
-        return geom;
+    /**
+     * @deprecated
+     */
+    renderStaticCubePreview(type: number, container) {
+        this.blockAtlas.renderStaticCubePreview(type, container);
     }
-
-
-    renderStaticCubePreview(type:number, container) {
-        // Set up scene
-        const scene = new THREE.Scene();
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(2, 4, 3);
-        scene.add(directionalLight);
-
-
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
-        camera.position.z = 3;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(256, 256);
-        container.appendChild(renderer.domElement);
-
-        // Create cube
-        const geometry = this.createTexturedBox(this.faces, this.uvs, type - 1);
-        const material = new THREE.MeshStandardMaterial({
-            map: this.atlas,
-            transparent: true,
-            color: 0xffffff,
-            roughness: 0.5,
-            metalness: 0.1
-
-        });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
-
-        // Set preset rotation (example: isometric-style)
-        cube.rotation.set(THREE.MathUtils.degToRad(35), THREE.MathUtils.degToRad(45), 0);
-
-        // Render once
-        renderer.render(scene, camera);
-    }
-
-
-
-
-    createTextureAtlas(texturePathSets: string[][], callback: (atlas: THREE.Texture, faces: Array<string>, uvs: Map<string, THREE.Vector4>) => void) {
-        const images: HTMLImageElement[] = [];
-        let loaded = 0;
-
-        const totalImages = texturePathSets.length * 6;
-        const countSets = texturePathSets.length;
-        const countFaces = 6;
-
-        texturePathSets.forEach((texturePaths) => {
-
-            while (texturePaths.length < 6) {
-                texturePaths.push(texturePaths[0]);
-            }
-
-            texturePaths.forEach((path) => {
-
-                const img = new Image();
-                img.crossOrigin = '';
-                img.src = path;
-                img.onload = () => {
-                    loaded++;
-                    if (loaded === totalImages) buildAtlas();
-                };
-                images.push(img);
-
-            });
-
-
-        });
-
-
-        function buildAtlas() {
-            const tileSize = 24; // assume square images
-            const canvas = document.createElement('canvas');
-            document.body.appendChild(canvas)
-            canvas.id = 'mesh-atlas';
-            canvas.width = tileSize * countSets;
-            canvas.height = tileSize * countFaces
-
-            const ctx = canvas.getContext('2d')!;
-            const uvs = new Map<string, THREE.Vector4>();
-            const faces: Array<string> = [];
-
-            for (let index = 0; index < images.length; index++) {
-                let i = index % countFaces;
-
-                let j = Math.floor(index / countFaces);
-                let setIndex = j;
-                ctx.drawImage(images[index], j * tileSize, i * tileSize, tileSize, tileSize);
-
-                if (index != 7) {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                    ctx.lineWidth = 0.3;
-                    let inset = 0.5;
-                    ctx.strokeRect(j * tileSize + inset, i * tileSize + inset, tileSize - 2 * inset, tileSize - 2 * inset);
-                }
-
-                const v = i / countFaces;
-                const faceId = `${setIndex}.${i}`;
-                faces.push(faceId);
-                uvs.set(faceId, new THREE.Vector4(setIndex / countSets, 1 - v - 1 / countFaces, (1 + setIndex) / countSets, 1 - v)); // (uMin, vMin, uMax, vMax)
-            }
-
-            const atlas = new THREE.CanvasTexture(canvas);
-            atlas.magFilter = THREE.NearestFilter;
-            atlas.minFilter = THREE.NearestMipMapNearestFilter;
-
-            callback(atlas, faces, uvs);
-        }
-    }
-
-
-
 
     render() {
 
 
+        this.blockAtlas = new BlockAtlas(BlockFaces);
+        this.blockAtlas.onload(() => {
 
-        const dirt = [
-            '/textures/grass_side.png', // px
-        ];
-
-        const grass = [
-            '/textures/grass_side.png', // px
-            '/textures/grass_side.png', // nx
-            '/textures/grass_top.png',  // py
-        ];
-
-        const stone = [
-            '/textures/gravel_side.png', // px
-        ];
-
-        const mantle = [
-            '/textures/compact_side.png', // px
-        ];
-
-        const diamond = [
-            '/textures/diamond_side.png'
-        ];
-
-        const gold = [
-            '/textures/gold_side.png'
-        ];
-        const gem = [
-            '/textures/gem_side.png'
-        ];
-        const water = [
-            '/textures/trans_side.png',
-            '/textures/trans_side.png',
-            '/textures/water_side.png'
-        ];
-
-        const leaves = [
-            '/textures/leaves_side.png',
-        ]
-
-        const wood = [
-            '/textures/trunk_side.png',
-            '/textures/trunk_side.png',
-            '/textures/trunk_top.png',
-        ];
-
-        const birtch = [
-            '/textures/trunk_white_side.png',
-            '/textures/trunk_white_side.png',
-            '/textures/trunk_white_top.png',
-        ];
-
-        const player = [
-            '/textures/player_back.png',
-            '/textures/player_face.png',
-            '/textures/player_top.png',
-            '/textures/player_neck.png',
-            '/textures/player_left.png',
-            '/textures/player_right.png',
-        ]
-
-
-
-
-        const pathSets = { dirt, grass, stone, mantle, diamond, gold, gem, water, leaves, wood, birtch }
-        this.types = Object.keys(pathSets);
-
-        this.createTextureAtlas(Object.values(pathSets), (atlas: THREE.Texture, faces: Array<string>, uvs: Map<string, THREE.Vector4>) => {
-            this.atlas = atlas;
-            this.faces = faces;
-            this.uvs = uvs;
-
-
-
-            this.getRadialNeighbourChunks(0, 0, 0, 8).forEach(({ cx, cy, cz }) => {
-                if (cy == 0) {
-                    this.generateChunkXZ(cx, cz)
-                    let key=`${cx},${cy},${cz}`;
-                    while(this.world[key]){
-                        this.buildChunkMesh(this.world[key], cx, cy, cz);
-                        cy++;
-                        key=`${cx},${cy},${cz}`;
-                    }
-                }
-            });
-
-            // this.on('chunk:update', ({ to }) => {
-            //     const { cx, cy, cz } = this.fromKey(to)
-
-            //     this.getRadialNeighbourChunks(cx, cy, cz, 10).forEach(({ key, cx, cy, cz }) => {
-            //         if (cy == 0 && (!!this.world[key])) {
-            //             this.buildChunkMesh(this.generateChunkXZ(cx, cz), cx, cy, cz);
-            //         }
-            //     });
-            // })
-
+            (new ChunkLoader(this)).loadChunks()
 
         });
 
@@ -732,7 +718,7 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
 
     // world block are x,y,z coordinates of blocks if there were no chunks (or relative to 0,0,0 chunk)
-    fromWorldBlock(worldX:number, worldY:number, worldZ:number):{key:string, cx:number, cy:number, cz:number, x:number, y:number, z:number} {
+    fromWorldBlock(worldX: number, worldY: number, worldZ: number): { key: string, cx: number, cy: number, cz: number, x: number, y: number, z: number } {
 
         const chunkSize = this.chunkSize;
 
@@ -759,7 +745,32 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
     }
 
-    getWorldGround(wx:number, wy:number, wz:number):number {
+    getChunkData(key) {
+
+
+        const data: BlockType[][][] = [];
+
+        for (let x = 0; x < this.chunkSize; x++) {
+            data[x] = this.world[key][x];
+        }
+
+        return data;
+    }
+
+
+    async loadChunks(cx, cz) {
+
+        let cy = 0;
+        let key = `${cx},${0},${cz}`;
+        while (await this.database.hasItem(key)) {
+            this.world[key] = await this.database.getItem(key)
+            cy++;
+            key = `${cx},${cy},${cz}`;
+        }
+
+    }
+
+    getWorldGround(wx: number, wy: number, wz: number): number {
 
         let { key, cy, x, y, z } = this.fromWorldBlock(wx, wy, wz);
 
@@ -773,8 +784,8 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
         while (y >= 0) {
             let type = this.world[key][x][y][z];
-            if (!(type == 0 || type == 8 || type == 9)) {
-                return cy * this.chunkSize + y;
+            if (!(type == this.getTypeId('air') || type == this.getTypeId('water'))) {
+                return cy * this.chunkSize + y + 1;
             }
             y--;
         }
@@ -788,24 +799,31 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
         return 0;
     }
 
-    fromCamera(pos:{x:number,y:number,z:number}) {
+    /**
+     * call this from the animate loop once, to keep track of the current location.
+     * this is the same fromWorld, but keeps track of the active block for generating/culling 
+     * 
+     * @param pos camera position
+     * @returns chunk/block location info
+     */
+    fromCamera(pos: { x: number, y: number, z: number }) {
         const location = this.fromWorld(pos);
 
         if (this.current !== location.key) {
             const from = this.current;
             const to = location.key;
             this.current = to;
-            this.emit('chunk:update', { from, to })
+            this.emit('activechunk:update', { from, to })
         }
 
         return location;
     }
 
-    fromWorld(pos:{x:number,y:number,z:number}) {
+    fromWorld(pos: { x: number, y: number, z: number }) {
 
 
         const worldX = pos.x + 0.5;
-        const worldY = pos.y;
+        const worldY = pos.y - 0.1;
         const worldZ = pos.z + 0.5;
 
 
@@ -830,8 +848,14 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
             x: x,
             y: y,
             z: z,
-            g: this.getWorldGround(worldX, worldY, worldZ)
+            g: this.getWorldGround(worldX, worldY, worldZ),
+            type: this.getTypeName(this.getWorldBlock(worldX, worldY, worldZ))
         }
+    }
+
+    reset(){
+         this.database.erase();
+         document.location=''
     }
 
     save() {
