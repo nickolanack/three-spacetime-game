@@ -138,7 +138,9 @@ export class Inventory {
 
             childNodes = Array.from(inventoryBar.childNodes);
 
-            childNodes.forEach((child, i) => {
+            childNodes.forEach((child:HTMLElement, i) => {
+
+             
         
                 if(i>=this.items.length){
                     child.innerHTML = "";
@@ -149,8 +151,8 @@ export class Inventory {
                 
 
                 if(this.items[i]){
-                    child.className = this.items[i].type
-                    child.dataset.itemCount = this.inifinityItems?"∞":this.items[i].count;
+                    child.className =`${this.items[i].type}`
+                    child.dataset.itemCount = `${this.inifinityItems?"∞":this.items[i].count}`;
                 }
 
                 if(child.firstChild){
@@ -166,7 +168,7 @@ export class Inventory {
                 }
                 
                 if(i<=9){
-                    child.dataset.key = i+1;
+                    child.dataset.key = `${i+1}`;
                 }
                 if (this.selectedItem == i) {
                     child.classList.add('selected');
