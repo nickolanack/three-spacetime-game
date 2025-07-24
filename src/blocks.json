@@ -1,0 +1,84 @@
+{
+   "dirt": [
+      "textures/grass_side.png"
+   ],
+   "grass": [
+      "textures/grass_side.png",
+      "textures/grass_side.png",
+      "textures/grass_top.png"
+   ],
+   "grass_2": [
+      "textures/grass_side.png",
+      "textures/grass_side.png",
+      "textures/grass_top2.png"
+   ],
+   "grass_3": [
+      "textures/grass_side.png",
+      "textures/grass_side.png",
+      "textures/grass_top3.png"
+   ],
+   "stone": [
+      "textures/gravel_side.png"
+   ],
+   "sand": [
+      "textures/sand_side.png"
+   ],
+   "sand_2": [
+      "textures/sand_side2.png"
+   ],
+   "mantle": [
+      "textures/compact_side.png"
+   ],
+   "lava": [
+      "textures/lava.png"
+   ],
+   "diamond": [
+      "textures/diamond_side.png"
+   ],
+   "gold": [
+      "textures/gold_side.png"
+   ],
+   "gem": [
+      "textures/gem_side.png"
+   ],
+   "water": [
+      "textures/trans_side.png",
+      "textures/trans_side.png",
+      "textures/water_side.png"
+   ],
+   "leaves": [
+      "textures/leaves_side.png"
+   ],
+   "leaves_2": [
+      "textures/leaves_side2.png"
+   ],
+   "wood": [
+      "textures/trunk_side.png",
+      "textures/trunk_side.png",
+      "textures/trunk_top.png",
+      "textures/trunk_top.png"
+   ],
+   "birtch": [
+      "textures/trunk_white_side.png",
+      "textures/trunk_white_side.png",
+      "textures/trunk_white_top.png",
+      "textures/trunk_white_top.png"
+   ],
+   "slime": [
+      "other/slime_bottom.png",
+      "other/slime_face.png",
+      "other/slime_top.png",
+      "other/slime_bottom.png",
+      "other/slime_side.png",
+      "other/slime_side.png"
+   ],
+   "grass_item": [
+      "textures/trans_side.png"
+   ],
+   "wheat_item": [
+      "textures/trans_side.png"
+   ],
+   "sword_item": [
+      "textures/trans_side.png"
+   ]
+}
