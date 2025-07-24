@@ -10,7 +10,19 @@ import { Inventory } from './Inventory';
 import * as Blockly from 'blockly';
 import { toolbox } from './blockly/toolbox';
 
-let camera, scene, renderer, controls;
+import { Characters } from './characters/Characters';
+import { CharacterController } from './CharacterController';
+
+
+
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+
+
+let camera, scene, renderer, controls, composer, blueFadePass, bloomPass;
 let wireframeTarget, wireframeDestination;
 
 let clock = new THREE.Clock();
@@ -20,15 +32,37 @@ let clock = new THREE.Clock();
 let chunks;
 let inventory;
 let environment;
+let characters;
 
 let pointerTarget, pointerDestination;
 
 
 const onClick = (event) => {
+
+
+  if (event.button == 0) {
+     document.getElementById('button-left').classList.add('selected');
+  }
+  if (event.button == 2) {
+     document.getElementById('button-right').classList.add('selected');
+  }
+
+
+  if(!controls.enabled){
+    return;
+  }
+
+
+  
+
   if (event.button == 0) {
     if (pointerTarget) {
-      const loc = chunks.fromWorld(pointerTarget)
-      inventory.addItem(chunks.takeBlock(loc.key, loc.x, loc.y, loc.z))
+      const {key,  x, y, z, type} = chunks.fromWorld(pointerTarget)
+      pointerTarget=null;
+      if(type=='air'){
+        throw 'Tried to take air!';
+      }
+      inventory.addItem(chunks.takeBlock(key, x, y, z))
     }
   }
 
@@ -36,25 +70,37 @@ const onClick = (event) => {
     if (pointerDestination) {
       const loc = chunks.fromWorld(pointerDestination)
 
-      const item=inventory.removeItem();
-      if(item>0){
+      const item = inventory.removeItem();
+      if (item > 0) {
         chunks.createBlock(loc.key, loc.x, loc.y, loc.z, item)
       }
-   
+
     }
   }
 
 }
 
 document.addEventListener('mousedown', onClick);
+document.addEventListener('mouseup', (event)=>{
+  if (event.button == 0) {
+     document.getElementById('button-left').classList.remove('selected');
+  }
+  if (event.button == 2) {
+     document.getElementById('button-right').classList.remove('selected');
+  }
+});
 
 window.addEventListener('keydown', (e) => {
-  const isMacShortcut = e.metaKey && e.key === 's';
-  const isWinShortcut = e.ctrlKey && e.key === 's';
+  const isCtrl = e.metaKey || e.ctrlKey
 
-  if (isMacShortcut || isWinShortcut) {
+  if (isCtrl && e.key === 's') {
     e.preventDefault();
     chunks.save()
+  }
+
+  if (isCtrl && e.key === 'd') {
+    e.preventDefault();
+    chunks.reset()
   }
 });
 
@@ -70,54 +116,155 @@ animate();
 
 function init() {
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.001, 1000);
+  camera.focus = 2.0
   // const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
 
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(
     0xcccccc, // Fog color
-    30,       // Near distance (start fading)
+    50,       // Near distance (start fading)
     200       // Far distance (completely invisible)
   );
-  scene.background = new THREE.Color(0xaaaaaa);
+  scene.background = new THREE.Color(0xffffff);
+
+
+
+
+
+
 
   chunks = new ChunkEngine(scene);
   chunks.render();
-  
-  inventory=new Inventory(chunks);
+  camera.position.set(-20, 13, -15)
+  camera.rotation.set(
+        0,
+       1.1 * Math.PI,
+        0
+    );
+
+
+  inventory = new Inventory(chunks);
 
   environment = new Environment(scene);
   environment.render();
 
   controls = new Controls(camera, scene, chunks);
 
-  new Item(scene, '/apple-gold.png', -0, 1, -1);
-  new Item(scene, '/apple.png', -1, 1, -1);
-  new Item(scene, '/grass.png', -2, 1, -1);
-  new Item(scene, '/seeds.png', -3, 1, -1, 2);
-  new Item(scene, '/glow.png', -4, 1, -1, 2);
+  // new Item(scene, 'apple-gold.png', -0, 1, -1);
+  // new Item(scene, 'apple.png', -1, 1, -1);
+  // new Item(scene, 'grass.png', -2, 1, -1);
+  // new Item(scene, 'seeds.png', -3, 1, -1, 2);
+  // new Item(scene, 'glow.png', -4, 1, -1, 2);
 
 
 
   // new Chicken(scene);
 
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2000, 2000),
-    new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  const grid = new THREE.GridHelper(2000, 100, 0x000000, 0x000000);
-  grid.material.opacity = 0.2;
-  grid.material.linewidth = 2;
-  grid.material.transparent = true;
-  scene.add(grid);
 
 
-  camera.position.y = 2;
+  // const grid = new THREE.GridHelper(2000, 100, 0x000000, 0x000000);
+  // grid.material.opacity = 0.2;
+  // grid.material.linewidth = 2;
+  // grid.material.transparent = true;
+  // scene.add(grid);
+
+
+  camera.position.set(-20, 13, -15)
+
+  // camera.position.set({x:-16, y:26, z:-80})
   renderer = new THREE.WebGLRenderer();
+
+
+   characters=[];
+
+  let gnome=(new Characters(camera, renderer)).createCharacter('gnome')
+  gnome.name='Timmy';
+  gnome.object.position.set(-20, 13, -15)
+  gnome.lookAt(camera);
+  scene.add(gnome.object);
+
+  characters.push(new CharacterController(gnome, chunks));
+
+  gnome=(new Characters(camera, renderer)).createCharacter('gnome')
+  gnome.name='Bob';
+  gnome.object.position.set(-23, 13, -15)
+  gnome.lookAt(camera);
+  scene.add(gnome.object);
+
+  characters.push(new CharacterController(gnome, chunks));
+
+  gnome=(new Characters(camera, renderer)).createCharacter('gnome')
+  gnome.name='Tommy';
+  gnome.object.position.set(-27, 13, -13)
+  gnome.lookAt(camera);
+  scene.add(gnome.object);
+
+  characters.push(new CharacterController(gnome, chunks));
+
+
+  let golem=(new Characters(camera, renderer)).createCharacter('golem')
+  golem.name='Giboej';
+  golem.object.position.set(-27, 13, -10)
+  golem.lookAt(camera);
+  scene.add(golem.object);
+
+  characters.push(new CharacterController(golem, chunks));
+
+
+
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+
+
+ 
+
+
+  const blueFadeShader = {
+    uniforms: {
+      tDiffuse: { value: null },
+      opacity: { value: 0.3 },
+      color: { value: new THREE.Vector3(0.0, 0.5, 0.6) } // RGB blue-ish
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float opacity;
+        uniform vec3 color;
+        varying vec2 vUv;
+        void main() {
+            vec4 tex = texture2D(tDiffuse, vUv);
+            vec3 tinted = mix(tex.rgb, color, opacity);
+            gl_FragColor = vec4(tinted, tex.a);
+        }
+    `
+  };
+
+  blueFadePass = new ShaderPass(blueFadeShader);
+  composer.addPass(blueFadePass);
+
+
+
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.1, // strength
+    0.5, // radius
+    0.2  // threshold
+  );
+  composer.addPass(bloomPass);
+
+
+
+
+
+
+
 
 
   renderer.shadowMap.enabled = true;
@@ -142,22 +289,35 @@ function init() {
 
 function animate() {
   requestAnimationFrame(animate);
+  const delta=clock.getDelta();
+  controls.animate(delta)
+  characters.forEach(c=>c.animate(delta))
+  environment.animate(clock, camera.position);
 
-  controls.animate(clock)
-  environment.animate(clock);
-
-  try{
-    lookingAt()
-  }catch(e){
-
-  }
+  
+  lookingAt()
 
 
   const loc = chunks.fromCamera(camera.position);
-  controls.groundLevel = loc.g;
-  document.getElementById('debug-console').innerHTML = `chunk: ${loc.chunk} block: ${loc.block} [${loc.g}]`;
 
-  renderer.render(scene, camera);
+  if (loc.type == 'water') {
+    blueFadePass.enabled = true;
+    bloomPass.enabled = true
+  } else {
+    blueFadePass.enabled = false;
+    bloomPass.enabled = false
+  }
+
+  controls.groundLevel = loc.g;
+
+  document.getElementById('debug-console').innerHTML = `chunk: ${loc.chunk} block: ${loc.block} [${loc.g}]<br/> 
+    ${(Math.round((performance as any).memory.usedJSHeapSize*10/Math.pow(1024,2))/10)}MB ${Object.values(chunks.world).filter((c:{mesh:any})=>!!c.mesh).length}/${Object.values(chunks.world).length}`;
+
+
+
+  // renderer.render(scene, camera);
+
+  composer.render()
 
 
 
@@ -243,7 +403,23 @@ function lookingAt() {
 
 
 
-
+const dark=Blockly.Theme.defineTheme('dark', {
+  name: 'dark',
+  base: Blockly.Themes.Classic,
+  componentStyles: {
+    workspaceBackgroundColour: '#1e1e1e44',
+    toolboxBackgroundColour: '#33333344',
+    toolboxForegroundColour: '#fff',
+    flyoutBackgroundColour: '#252526',
+    flyoutForegroundColour: '#ccc',
+    flyoutOpacity: 1,
+    scrollbarColour: '#797979',
+    insertionMarkerColour: '#fff',
+    insertionMarkerOpacity: 0.3,
+    scrollbarOpacity: 0.4,
+    cursorColour: '#d0d0d0',
+  },
+});
 
 
 
@@ -256,9 +432,20 @@ const workspace = Blockly.inject(blocklyDiv, {
   comments: true,
   disable: false,
   maxBlocks: Infinity,
-  trashcan: true,
+  trashcan: false,
   horizontalLayout: false,
   toolboxPosition: 'start',
   css: true,
   media: 'https://unpkg.com/blockly/media/',
+  theme: dark
+});
+
+document.getElementById('runButton').addEventListener('click', () => {
+  const code = Blockly.JavaScript.workspaceToCode(workspace);
+  console.log('Generated code:', code);
+  try {
+    eval(code); // ⚠️ Runs the code
+  } catch (e) {
+    console.error('Error running code:', e);
+  }
 });

@@ -1,134 +1,303 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Three.js First Person</title>
-    <style>
-      body { margin: 0; overflow: hidden; }
-      canvas { display: block; }
-      #instructions {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        text-align: center;
-        color: white;
-        font-family: Arial;
-        font-size: 24px;
-        background: rgba(0,0,0,0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-      }
-      #crosshair {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        width: 8px;
-        height: 8px;
-        margin-left: -4px;
-        margin-top: -4px;
-        background-color: white;
-        border-radius: 50%;
-        z-index: 999;
-        pointer-events: none;
-        opacity: 0.8;
-      }
 
-      #blocklyDiv {
-        height: 100%;
-        width: 300px;
-        background-color: #f0f0f0;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <title>Three.js First Person</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #instructions {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      color: white;
+      font-family: Arial;
+      font-size: 24px;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      flex-direction: column;
+    }
+
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      margin-left: -4px;
+      margin-top: -4px;
+      background-color: white;
+      border-radius: 50%;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    /*
+    #blocklyDiv {
+      height: 100%;
+      width: 80vw;
+    
+      position: absolute;
+      backdrop-filter: blur(5px)
+    }
+      */
+
+    button#runButton {
+      position: absolute;
+      top: 0;
+      right: 0;
+      margin: 10px;
+      background: black;
+      border: none;
+      border-radius: 3px;
+      color: white;
+    }
 
 
-      canvas#mesh-atlas {
-          position: absolute;
-          right: 0;
-          top: 0;
-      }
+    canvas#mesh-atlas {
+      position: absolute;
+      right: 0;
+      top: 0;
+    }
 
-      div#debug-console {
-          position: fixed;
-          top: 10px;
-          left: 10px;
-          color: white;
-          font-family: monospace;
-          text-shadow: 0 0 10px black;
-      }
+    div#debug-console {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: monospace;
+      text-shadow: 0 0 10px black;
+    }
 
-      div#inventory-bar {
-        position: absolute;
-        bottom: 10px;
-        left: 10px;
-        border: 2px solid ffffffb0;
-        width: 1000px;
-        height: 100px;
-        max-height: calc(min(100vh / 5, 100vw / 12));
-        max-width: calc(min(100vh * 2, 100vw * 10 / 12));
-        background: #0000001a;
+    div#inventory-bar {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      border: 2px solid ffffffb0;
+      width: 1000px;
+      height: 100px;
+      max-height: calc(min(100vh / 5, 100vw / 12));
+      max-width: calc(min(100vh * 2, 100vw * 10 / 12));
+      background: #0000001a;
       backdrop-filter: blur(5px);
-     }
+    }
 
-      div#inventory-bar>div {
-        height: 96px;
-        max-height: calc(min(100vh / 5, 100vw / 12) - 4px);
-        max-width: calc(min(100vh / 5, 100vw / 12) - 4px);
-        display: inline-block;
-        background: #0000005c;
-        width: 96px;
-        margin: 2px;
-        border-radius: 3px;
-        border: 2px solid #00000033;
-        box-sizing: border-box;
-        position: relative;
+    div#inventory-bar>div {
+      height: 96px;
+      max-height: calc(min(100vh / 5, 100vw / 12) - 4px);
+      max-width: calc(min(100vh / 5, 100vw / 12) - 4px);
+      display: inline-block;
+      background: #0000005c;
+      width: 96px;
+      margin: 2px;
+      border-radius: 3px;
+      border: 2px solid #00000033;
+      box-sizing: border-box;
+      position: relative;
     }
 
     div#inventory-bar>div.selected {
-        border-color: #ffffffb0;
-        background: black;
+      border-color: #ffffffb0;
+      background: black;
     }
 
     div#inventory-bar>div:after {
-        content: attr(data-item-count);
-        position: absolute;
-        color: white;
-        font-family: monospace;
-        bottom: 10px;
-        right: 10px;
+      content: attr(data-item-count);
+      position: absolute;
+      color: white;
+      font-family: monospace;
+      bottom: 10px;
+      right: 10px;
     }
 
     div#inventory-bar>div:before {
-        content: attr(data-key);
-        position: absolute;
-        color: white;
-        font-family: monospace;
-        top: 5px;
-        left: 5px;
-        font-weight: bold;
-        background: #ffffff33;
-        width: 20px;
-        height: 20px;
-        line-height: 20px;
-        text-align: center;
-        border-radius: 3px;
+      content: attr(data-key);
+      position: absolute;
+      color: white;
+      font-family: monospace;
+      top: 5px;
+      left: 5px;
+      font-weight: bold;
+      background: #ffffff33;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+      text-align: center;
+      border-radius: 3px;
     }
 
     div#inventory-bar>div>canvas {
-        height: 96px !important;
-        max-height: calc(min(100vh / 5, 100vw / 12) - 4px);
-        max-width: calc(min(100vh / 5, 100vw / 12) - 4px);
-        width: 96px !important;
+      height: 96px !important;
+      max-height: calc(min(100vh / 5, 100vw / 12) - 4px);
+      max-width: calc(min(100vh / 5, 100vw / 12) - 4px);
+      width: 96px !important;
     }
 
-    </style>
-  </head>
-  <body>
-    <div id="instructions">Welcome to DigBuild</div>
-    <div id="crosshair"></div>
-    <script type="module" src="/src/main.ts"></script>
-    <div id="debug-console"></div>
-    <div id="inventory-bar"></div>
-    <div id="blocklyDiv"></div>
-  </body>
+
+    .keyboard>div>div {
+      height: 48px;
+      max-height: calc(min(100vh / 5, 100vw / 12) - 4px);
+      max-width: calc(min(100vh / 5, 100vw / 12) - 4px);
+      display: inline-block;
+      background: #0000005c;
+      width: 48px;
+      margin: 2px;
+      border-radius: 3px;
+      border: 2px solid #00000033;
+      box-sizing: border-box;
+      position: relative;
+      display: inline-block;
+      vertical-align: top;
+      line-height: calc(min(48px, calc(min(100vh / 5, 100vw / 12) - 4px)));
+      color: white;
+      font-family: monospace;
+    }
+
+    .keyboard>div>div.selected {
+      border-color: #ffffffb0;
+      background: black;
+    }
+
+
+    .keyboard>div>div#key-shift {
+      width: 70px;
+      max-width: calc(min(200vh / 5, 200vw / 12) - 4px);
+    }
+
+    .keyboard>div>div#key-space {
+      width: 125px;
+      max-width: calc(min(250vh / 5, 250vw / 12) - 4px);
+    }
+
+    div#key-space:after {
+      content: "(2x to fly)";
+      position: absolute;
+      width: max-content;
+      bottom: -25px;
+      display: inline-block;
+      font-size: 8px;
+    }
+
+    div#key-space {
+      position: relative;
+    }
+
+    div.input-indicator {
+      text-align: center;
+      position: absolute;
+      top: 20vh;
+    }
+
+    div.input-indicator-mouse {
+      text-align: center;
+      position: absolute;
+      bottom: 10px;
+      right: 20px;
+    }
+
+
+
+    .mouse {
+      width: 80px;
+      height: 120px;
+      background: #0000005c;
+      border-radius: 50px 50px 90px 90px;
+      /* elliptical top corners */
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      padding: 5px;
+
+      border: 3px solid #00000033;
+
+      border-left-color: rgba(var(--left), var(--left), var(--left), 255);
+      border-right-color: rgba(var(--right), var(--right), var(--right), 255);
+      scale: 0.66;
+    }
+
+    .mouse>div {
+      width: 50%;
+      height: 50%;
+      background: #0000005c;
+      border: 3px solid #00000033;
+    }
+
+    #button-left {
+      border-radius: 24px 10px 10px 10px;
+      margin-right: 5px;
+    }
+
+    #button-right {
+      border-radius: 10px 24px 10px 10px;
+    }
+
+
+    .mouse>div.selected {
+      border-color: #ffffffb0;
+      background: black;
+    }
+
+
+
+    .label {
+      background: black;
+      font-family: monospace;
+      padding: 5px 10px;
+      border-radius: 2px;
+      box-shadow: 0 0 3px black;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="instructions">
+    <h1>Welcome to Diggy McBuild Face</h1><br />
+    <h3>Click to play</h3>
+  </div>
+  <div id="crosshair"></div>
+  <script type="module" src="/src/main.ts"></script>
+  <div id="debug-console"></div>
+  <div class="input-indicator">
+    <div class="keyboard">
+      <div>
+        <div id="key-w">w</div>
+      </div>
+      <div>
+        <div id="key-a">a</div>
+        <div id="key-s">s</div>
+        <div id="key-d">d</div>
+      </div>
+      <div>
+        <div id="key-shift">shift</div>
+        <div id="key-space">space</div>
+      </div>
+    </div>
+  </div>
+  <div class="input-indicator-mouse">
+    <div id="mouse" class="mouse">
+      <div id="button-left"></div>
+      <div id="button-right"></div>
+    </div>
+
+  </div>
+  <div id="inventory-bar"></div>
+  <div id="blocklyDiv">
+    <button id="runButton">▶️ Run</button>
+  </div>
+  <script src="https://unpkg.com/blockly/javascript.min.js"></script>
+</body>
+
 </html>
