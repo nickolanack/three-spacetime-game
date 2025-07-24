@@ -9,12 +9,16 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/three": "^0.177.0",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vite-plugin-javascript-obfuscator": "^3.1.0",
+    "vite-plugin-singlefile": "^2.2.0"
   },
   "dependencies": {
     "blockly": "^12.1.0",
     "eventemitter3": "^5.0.1",
+    "gsap": "^3.13.0",
     "noisejs": "^2.1.0",
     "three": "^0.177.0"
   }
