@@ -5,11 +5,11 @@ import obfuscatorPlugin from "vite-plugin-javascript-obfuscator";
 export default defineConfig({
   plugins: [
     
-    // obfuscatorPlugin({
+    obfuscatorPlugin({
     
-    // }), 
+    }), 
     
-    // viteSingleFile()
+    viteSingleFile()
     
     ],
  
