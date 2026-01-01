@@ -44,17 +44,17 @@
       pointer-events: none;
       opacity: 0.8;
     }
-    /*
-    #blocklyDiv {
+    
+    #blocklyDiv.selected {
       height: 100%;
       width: 80vw;
     
       position: absolute;
       backdrop-filter: blur(5px)
     }
-      */
+      
 
-    button#runButton {
+    button#runButton, button#codeButton {
       position: absolute;
       top: 0;
       right: 0;
@@ -251,7 +251,7 @@
 
 
 
-    .label {
+    .character.label {
       background: black;
       font-family: monospace;
       padding: 5px 10px;
@@ -259,6 +259,25 @@
       box-shadow: 0 0 3px black;
       opacity: 0.8;
     }
+    .character.label .health {
+        display: inline-block;
+        background: black;
+        height: 2px;
+        width: calc(100% + 20px);
+        position: absolute;
+        top: -7px;
+        left: -10px;
+    }
+
+    .character.label .health:after {
+      content: "";
+      width: var(--health);
+      background: red;
+      display: inline-block;
+      height: 2px;
+      position: absolute;
+      left: 0;
+  }
   </style>
 </head>
 
@@ -296,6 +315,7 @@
   <div id="inventory-bar"></div>
   <div id="blocklyDiv">
     <button id="runButton">▶️ Run</button>
+    <button id="runButton" onclick="this.parentNode.classList.toggle('selected')">▶️ Code</button>
   </div>
   <script src="https://unpkg.com/blockly/javascript.min.js"></script>
 </body>
