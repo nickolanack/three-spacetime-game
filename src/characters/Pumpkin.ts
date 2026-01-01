@@ -3,20 +3,20 @@ import { PixelMesh } from '../PixelMesh';
 import { BlockAtlas } from '../BlockAtlas';
 import { Character } from './Character';
 
-export class Gnome extends Character{
+export class Pumpkin extends Character {
 
     showWireFrame: boolean = false;
-    
+
     constructor(camera, renderer) {
 
         super(camera, renderer)
 
-      
+
 
 
         this.name = `Gnome${Math.floor(Math.random() * 9999)}`
 
-      
+
 
         const group = new THREE.Group();
         const groupOuter = new THREE.Group();
@@ -212,12 +212,12 @@ export class Gnome extends Character{
             let blockAtlas = new BlockAtlas({
                 "gnome": [
 
-                    "characters/Gnome/gnome_head_back.png",
-                    "characters/Gnome/gnome_head_face.png",
-                    "characters/Gnome/gnome_head_side.png",
-                    "characters/Gnome/gnome_head_side.png",
-                    "characters/Gnome/gnome_head_side.png",
-                    "characters/Gnome/gnome_head_side2.png",
+                    "characters/Pumpkin/pumpkin_head_side.png",
+                    "characters/Pumpkin/pumpkin_head_face.png",
+                    "characters/Pumpkin/pumpkin_head_side.png",
+                    "characters/Pumpkin/pumpkin_head_side.png",
+                    "characters/Pumpkin/pumpkin_head_side.png",
+                    "characters/Pumpkin/pumpkin_head_side.png",
                 ]
             });
             blockAtlas.onload(() => {
@@ -243,7 +243,7 @@ export class Gnome extends Character{
 
 
 
-             this.createLabel()
+            this.createLabel()
 
 
 
@@ -253,11 +253,11 @@ export class Gnome extends Character{
 
         group.position.set(-0.15, -1, -0.15)
         this.object = groupOuter;
-        this.object.name='gnome'
+        this.object.name = 'pumpkin'
 
 
     }
 
-
+    
 
 }
