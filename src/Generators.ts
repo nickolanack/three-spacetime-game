@@ -4,7 +4,7 @@ import type { ChunkEngine } from './ChunkEngine';
 
 type BlockType = number; // 0 = air, 1 = dirt, 2 = grass ...
 
-type TopOptions={ ignoreLeaves?: boolean, ignoreWater?: boolean}
+type TopOptions = { ignoreLeaves?: boolean, ignoreWater?: boolean }
 
 export class Generators {
     chunks;
@@ -21,12 +21,16 @@ export class Generators {
         return this.chunks.getTypeId(type);
     }
 
+    isTypeOf(type: string | number, expected:string):boolean {
+        return this.chunks.isTypeOf(type, expected);
+    }
+
     getChunk(cx: number, cy: number, cz: number) {
         const key = `${cx},${cy},${cz}`;
         let chunk = this.chunks.world[key];
         if (!chunk) {
 
-            if(cy==0){
+            if (cy == 0) {
                 throw 'Generating empty root chunk will make a hole!';
             }
 
@@ -55,7 +59,7 @@ export class Generators {
         }
     }
 
-    addPerlin(cx: number, cz: number, opt:{type:string|number, height:number, sub?:number, extrude?:number}) {
+    addPerlin(cx: number, cz: number, opt: { type: string | number, height: number, sub?: number, extrude?: number }) {
 
 
         this._eachWXZ(cx, cz, ({ wx, wz }) => {
@@ -189,6 +193,37 @@ export class Generators {
 
     }
 
+    inset(cx: number, cz: number, opt) {
+
+        this._eachWXZ(cx, cz, ({ wx, wz }) => {
+
+
+            let value = 1
+
+            let { wy, type } = this._topWorldBlock(wx, wz, opt);
+
+            let height = opt.height;
+
+            if (typeof height == 'function') {
+                height = height(wx, wy, wz, type)
+            }
+
+            height = Math.round((value) * height); // scale to 0–10 height
+            if (typeof opt.sub == 'number') {
+                height = Math.max(0, height - opt.sub);
+            }
+
+            while (height > 0 && wy >= 0) {
+                this.setWBlock(wx, wy, wz, opt.type)
+                height--;
+                wy--;
+            }
+
+
+        });
+
+    }
+
     subPerlin(cx: number, cz: number, opt) {
 
 
@@ -219,7 +254,7 @@ export class Generators {
 
 
 
-    _topWorldBlock(worldX: number, worldZ: number, opt?: TopOptions|any) {
+    _topWorldBlock(worldX: number, worldZ: number, opt?: TopOptions | any) {
 
         if (typeof opt == 'undefined') {
             opt = {};
@@ -236,7 +271,7 @@ export class Generators {
         const ignoreTypes = [air];
 
         if (opt?.ignoreLeaves ?? true) {
-            ignoreTypes.push(this.getTypeId('leaves'));
+            ignoreTypes.push(this.getTypeId('leaves_dark'));
         }
         if (opt?.ignoreWater ?? true) {
             ignoreTypes.push(this.getTypeId('water'));
@@ -249,7 +284,7 @@ export class Generators {
             const chunk = this.getChunk(cx, cy, cz);
             let y = ((Math.floor(wy) % this.chunkSize) + this.chunkSize) % this.chunkSize;
             const type = chunk[x][y][z];
-            if (ignoreTypes.indexOf(type) ==-1) {
+            if (ignoreTypes.indexOf(type) == -1) {
                 return { wy, cy, y, type };
             }
             wy--;
@@ -327,6 +362,9 @@ export class Generators {
 
             const { wy, type } = this._topWorldBlock(wx, wz, { ignoreWater: false });
 
+            if (type == this.getTypeId('dirt_dark')) {
+                this.setWBlock(wx, wy, wz, 'grass_dark')
+            }
             if (type == this.getTypeId('dirt')) {
                 this.setWBlock(wx, wy, wz, 'grass')
             }
@@ -341,13 +379,17 @@ export class Generators {
 
             const { wy, type } = this._topWorldBlock(wx, wz, { ignoreWater: false });
 
-            if (type == this.getTypeId('wood') || type == this.getTypeId('birtch')) {
+            if (type == this.getTypeId('wood') || type == this.getTypeId('wood_dark') || type == this.getTypeId('wood_birtch')) {
                 let count = Math.round(12 + Math.random() * 12);
                 let neighbours = this.chunks.getRadialNeighbourBlocks(wx, wy, wz, 3);
 
                 let apply = (b) => {
                     if (b.wy >= wy && this.getWBlockType(b.wx, b.wy, b.wz) != type) {
-                        this.setWBlock(b.wx, b.wy, b.wz, 'leaves');
+                        if(type == this.getTypeId('wood_dark')){
+                            this.setWBlock(b.wx, b.wy, b.wz, 'leaves_dark');
+                        }else{
+                            this.setWBlock(b.wx, b.wy, b.wz, 'leaves');
+                        }
                     }
                 };
 
@@ -374,7 +416,7 @@ export class Generators {
     }
 
 
-    grow(type:string, cx: number, cz: number, opt) {
+    grow(type: string, cx: number, cz: number, opt) {
 
         this.addRandom(cx, cz, {
             probability: opt.probability,
@@ -390,8 +432,8 @@ export class Generators {
         this.addRandom(cx, cz, {
             probability: opt.probability,
             height: (wy, type) => {
-               
-                return this.getWBlockType(cx, wy+1, cz) == this.getTypeId('water') ? 1 : 0
+
+                return this.getWBlockType(cx, wy + 1, cz) == this.getTypeId('water') ? 1 : 0
             },
             type: 'wheat_item'
         });
@@ -419,6 +461,10 @@ export class Generators {
 
     }
 
+
+
+
+   
 
 }
 
