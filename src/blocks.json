@@ -1,6 +1,10 @@
 {
+
    "dirt": [
       "textures/grass_side.png"
+   ],
+   "dirt_dark": [
+      "textures/grass_side_dark.png"
    ],
    "grass": [
       "textures/grass_side.png",
@@ -17,8 +21,25 @@
       "textures/grass_side.png",
       "textures/grass_top3.png"
    ],
+   "grass_dark": [
+      "textures/grass_side_dark.png",
+      "textures/grass_side_dark.png",
+      "textures/grass_top_dark.png"
+   ],
    "stone": [
       "textures/gravel_side.png"
+   ],
+   "stone_dark": [
+      "textures/gravel_side_dark.png"
+   ],
+   "greystone": [
+      "textures/greystone.png"
+   ],
+   "ice":[
+      "textures/ice.png"
+   ],
+   "metal":[
+      "textures/metal.png"
    ],
    "sand": [
       "textures/sand_side.png"
@@ -52,13 +73,22 @@
    "leaves_2": [
       "textures/leaves_side2.png"
    ],
+    "leaves_dark": [
+      "textures/leaves_side_dark.png"
+   ],
    "wood": [
       "textures/trunk_side.png",
       "textures/trunk_side.png",
       "textures/trunk_top.png",
       "textures/trunk_top.png"
    ],
-   "birtch": [
+   "wood_dark": [
+      "textures/trunk_side_dark.png",
+      "textures/trunk_side_dark.png",
+      "textures/trunk_top_dark.png",
+      "textures/trunk_top_dark.png"
+   ],
+   "wood_birtch": [
       "textures/trunk_white_side.png",
       "textures/trunk_white_side.png",
       "textures/trunk_white_top.png",
@@ -72,6 +102,30 @@
       "other/slime_side.png",
       "other/slime_side.png"
    ],
+
+   "white": [
+      "textures/white.png"
+   ],
+   "light_gray": [
+      "textures/light_gray.png"
+   ],
+   "dark_gray": [
+      "textures/dark_gray.png"
+   ],
+   "wood_planks":[
+      "textures/wood.png"
+   ],
+   "wood_planks_dark":[
+      "textures/wood_dark.png"
+   ],
+   "wood_planks_extra_dark":[
+      "textures/wood_dark_2.png"
+   ],
+   "table": [
+      "textures/wood.png",
+      "textures/wood.png",
+      "textures/table.png"
+   ],
    "grass_item": [
       "textures/trans_side.png"
    ],
@@ -80,5 +134,8 @@
    ],
    "sword_item": [
       "textures/trans_side.png"
+   ],
+   "door_wood_item":[
+      "textures/wood.png"
    ]
 }
