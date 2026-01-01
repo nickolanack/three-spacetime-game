@@ -26,7 +26,7 @@ export class CharacterController {
 
     lastForwardTap = 0
     isRunning = false;
-    isInWater = false;
+    isInLiquid = false;
 
     gravity = -30;
     jumpStrength = 10;
@@ -53,8 +53,8 @@ export class CharacterController {
         }
 
 
-       
-      
+
+
 
     }
 
@@ -66,7 +66,7 @@ export class CharacterController {
 
 
         // return
-        
+
         let speed = this.playerSpeed;
         if (this.isRunning) {
             speed = speed * 2;
@@ -75,7 +75,7 @@ export class CharacterController {
             speed = speed / 2;
         }
 
-        if (this.isInWater) {
+        if (this.isInLiquid) {
             speed = this.playerSpeed / 3;
         }
 
@@ -113,11 +113,11 @@ export class CharacterController {
         let { g, type } = this.chunks.fromWorld(this.object.position);
         this.groundLevel = g;
 
-        if (type == 'water' && (!this.isInWater) && (!this.isOnGround)) {
+        if ((type == 'water' || type == 'lava') && (!this.isInLiquid) && (!this.isOnGround)) {
             this.velocityY = 0
         }
 
-        this.isInWater = type == 'water';
+        this.isInLiquid = type == 'water' || type == 'lava';
 
 
 
@@ -156,7 +156,7 @@ export class CharacterController {
 
         if (!this.isOnGround) {
             let gravity = this.gravity;
-            if (this.isInWater && this.velocityY < 0) {
+            if (this.isInLiquid && this.velocityY < 0) {
                 gravity = gravity / 20;
             }
             this.velocityY += gravity * delta;
@@ -193,20 +193,20 @@ export class CharacterController {
 
 
     _moveForward(distance: number) {
-        const obj=this.object;
+        const obj = this.object;
         const direction = new THREE.Vector3();
         obj.getWorldDirection(direction);
 
 
         // Get a random angle in radians (e.g. between -30° and +30°)
-       
+
         // Rotate direction around Y-axis
         direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.character.randomAngle);
         obj.position.add(direction.multiplyScalar(distance));
     }
 
-    _moveRight( distance: number) {
-        const obj=this.object;
+    _moveRight(distance: number) {
+        const obj = this.object;
         const right = new THREE.Vector3();
         obj.getWorldDirection(right);
         right.crossVectors(obj.up, right).normalize(); // get right vector from up × forward
