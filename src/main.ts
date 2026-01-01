@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 
 import { ChunkEngine } from './ChunkEngine';
+import { ChunkTemplateEngine } from './ChunkTemplateEngine';
 import { Controls } from './Controls';
 import { Environment } from './Environment';
 import { Item } from './Item';
@@ -22,7 +23,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
 
-let camera, scene, renderer, controls, composer, blueFadePass, bloomPass;
+let camera, scene, renderer, controls, composer, blueFadePass, orangeFadePass, bloomPass;
 let wireframeTarget, wireframeDestination;
 
 let clock = new THREE.Clock();
@@ -34,39 +35,57 @@ let inventory;
 let environment;
 let characters;
 
-let pointerTarget, pointerDestination;
+let pointerTarget, pointerDestination, pointerCharacter;
 
 
 const onClick = (event) => {
 
 
   if (event.button == 0) {
-     document.getElementById('button-left').classList.add('selected');
+    document.getElementById('button-left').classList.add('selected');
   }
   if (event.button == 2) {
-     document.getElementById('button-right').classList.add('selected');
+    document.getElementById('button-right').classList.add('selected');
   }
 
 
-  if(!controls.enabled){
+  if (!controls.enabled) {
     return;
   }
 
 
-  
+
 
   if (event.button == 0) {
     if (pointerTarget) {
-      const {key,  x, y, z, type} = chunks.fromWorld(pointerTarget)
-      pointerTarget=null;
-      if(type=='air'){
+      const { key, x, y, z, type } = chunks.fromWorld(pointerTarget)
+      pointerTarget = null;
+      if (type == 'air') {
         throw 'Tried to take air!';
       }
-      inventory.addItem(chunks.takeBlock(key, x, y, z))
+      let item=chunks.takeBlock(key, x, y, z);
+      setTimeout(()=>{
+        inventory.addItem(item)
+      }, 500)
+      
+      return;
     }
+
+    if (pointerCharacter) {
+      console.log(pointerCharacter)
+      pointerCharacter.character.damage(10);
+    }
+
   }
 
   if (event.button == 2) {
+    if (pointerTarget) {
+      const { key, x, y, z, type } = chunks.fromWorld(pointerTarget)
+      if (type == 'table') {
+        alert('show crafting menu');
+        return;
+      }
+    }
     if (pointerDestination) {
       const loc = chunks.fromWorld(pointerDestination)
 
@@ -81,12 +100,12 @@ const onClick = (event) => {
 }
 
 document.addEventListener('mousedown', onClick);
-document.addEventListener('mouseup', (event)=>{
+document.addEventListener('mouseup', (event) => {
   if (event.button == 0) {
-     document.getElementById('button-left').classList.remove('selected');
+    document.getElementById('button-left').classList.remove('selected');
   }
   if (event.button == 2) {
-     document.getElementById('button-right').classList.remove('selected');
+    document.getElementById('button-right').classList.remove('selected');
   }
 });
 
@@ -132,18 +151,34 @@ function init() {
 
 
 
-
   chunks = new ChunkEngine(scene);
+  // chunks = new ChunkTemplateEngine(scene);
   chunks.render();
   camera.position.set(-20, 13, -15)
   camera.rotation.set(
-        0,
-       1.1 * Math.PI,
-        0
-    );
+    0,
+    1.1 * Math.PI,
+    0
+  );
 
 
   inventory = new Inventory(chunks);
+  inventory.inifinityItems = false;
+  setTimeout(() => {
+    // inventory.addItem(chunks.getTypeId('dirt'));
+    // inventory.addItem(chunks.getTypeId('metal'));
+    // inventory.addItem(chunks.getTypeId('wood_dark'));
+    // // inventory.addItem(chunks.getTypeId('wood'));
+    // inventory.addItem(chunks.getTypeId('door_wood_item'));
+    // inventory.addItem(chunks.getTypeId('grass_dark'));
+    // inventory.addItem(chunks.getTypeId('table'));
+    // inventory.addItem(chunks.getTypeId('wood_planks'));
+    // inventory.addItem(chunks.getTypeId('wood_planks_dark'));
+    // inventory.addItem(chunks.getTypeId('wood_planks_extra_dark'));
+    // inventory.addItem(chunks.getTypeId('leaves'));
+    // inventory.selectedItem=1
+    inventory._update()
+  }, 2000)
 
   environment = new Environment(scene);
   environment.render();
@@ -176,48 +211,63 @@ function init() {
   renderer = new THREE.WebGLRenderer();
 
 
-   characters=[];
+  characters = new Characters(camera, renderer);
 
-  let gnome=(new Characters(camera, renderer)).createCharacter('gnome')
-  gnome.name='Timmy';
-  gnome.object.position.set(-20, 13, -15)
-  gnome.lookAt(camera);
-  scene.add(gnome.object);
+  const gnome1 = characters.createCharacter('gnome')
+  gnome1.name = 'Timmy';
+  gnome1.object.position.set(-20, 13, -15)
+  gnome1.lookAt(camera);
+  scene.add(gnome1.object);
 
-  characters.push(new CharacterController(gnome, chunks));
+  gnome1.on('character:die', () => {
+    scene.remove(gnome1.object);
+  })
 
-  gnome=(new Characters(camera, renderer)).createCharacter('gnome')
-  gnome.name='Bob';
-  gnome.object.position.set(-23, 13, -15)
-  gnome.lookAt(camera);
-  scene.add(gnome.object);
+  characters.add(new CharacterController(gnome1, chunks));
 
-  characters.push(new CharacterController(gnome, chunks));
+  const gnome2 = characters.createCharacter('gnome')
+  gnome2.name = 'Bob';
+  gnome2.object.position.set(-23, 13, -15)
+  gnome2.lookAt(camera);
+  scene.add(gnome2.object);
+  gnome2.on('character:die', () => {
+    scene.remove(gnome2.object);
+  })
 
-  gnome=(new Characters(camera, renderer)).createCharacter('gnome')
-  gnome.name='Tommy';
-  gnome.object.position.set(-27, 13, -13)
-  gnome.lookAt(camera);
-  scene.add(gnome.object);
-
-  characters.push(new CharacterController(gnome, chunks));
+  characters.add(new CharacterController(gnome2, chunks));
 
 
-  let golem=(new Characters(camera, renderer)).createCharacter('golem')
-  golem.name='Giboej';
+
+
+  const pumpkin = characters.createCharacter('pumpkin')
+  pumpkin.name = 'Tommy';
+  pumpkin.object.position.set(-27, 13, -13)
+  pumpkin.lookAt(camera);
+  scene.add(pumpkin.object);
+  pumpkin.on('character:die', () => {
+    scene.remove(pumpkin.object);
+  })
+
+  characters.add(new CharacterController(pumpkin, chunks));
+
+
+  const golem = characters.createCharacter('golem')
+  golem.name = 'Giboej';
   golem.object.position.set(-27, 13, -10)
   golem.lookAt(camera);
   scene.add(golem.object);
+  golem.on('character:die', () => {
+    scene.remove(golem.object);
+  })
 
-  characters.push(new CharacterController(golem, chunks));
-
+  characters.add(new CharacterController(golem, chunks));
 
 
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
 
- 
+
 
 
   const blueFadeShader = {
@@ -250,6 +300,34 @@ function init() {
   composer.addPass(blueFadePass);
 
 
+  const orangeFadeShader = {
+    uniforms: {
+      tDiffuse: { value: null },
+      opacity: { value: 0.3 },
+      color: { value: new THREE.Vector3(0.6, 0.2, 0.2) } // RGB orange-ish
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float opacity;
+        uniform vec3 color;
+        varying vec2 vUv;
+        void main() {
+            vec4 tex = texture2D(tDiffuse, vUv);
+            vec3 tinted = mix(tex.rgb, color, opacity);
+            gl_FragColor = vec4(tinted, tex.a);
+        }
+    `
+  };
+
+  orangeFadePass = new ShaderPass(orangeFadeShader);
+  composer.addPass(orangeFadePass);
 
   bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -288,13 +366,17 @@ function init() {
 }
 
 function animate() {
+  // console.log(`init ${camera.position}`)
   requestAnimationFrame(animate);
-  const delta=clock.getDelta();
+  const delta = clock.getDelta();
+  //  console.log(`player ${JSON.stringify(camera.position)})`)  
   controls.animate(delta)
-  characters.forEach(c=>c.animate(delta))
+  //  console.log(`characters ${JSON.stringify(camera.position)}`)  
+  characters.animate(delta)
+  //  console.log(`env ${JSON.stringify(camera.position)}`)  
   environment.animate(clock, camera.position);
 
-  
+  // console.log(`look ${JSON.stringify(camera.position)}`)  
   lookingAt()
 
 
@@ -302,16 +384,22 @@ function animate() {
 
   if (loc.type == 'water') {
     blueFadePass.enabled = true;
-    bloomPass.enabled = true
+    orangeFadePass.enabled = false;
+    // bloomPass.enabled = true
+  } else if (loc.type == 'lava') {
+    blueFadePass.enabled = false;
+    orangeFadePass.enabled = true;
+    // bloomPass.enabled = true
   } else {
     blueFadePass.enabled = false;
+    orangeFadePass.enabled = false;
     bloomPass.enabled = false
   }
 
   controls.groundLevel = loc.g;
 
   document.getElementById('debug-console').innerHTML = `chunk: ${loc.chunk} block: ${loc.block} [${loc.g}]<br/> 
-    ${(Math.round((performance as any).memory.usedJSHeapSize*10/Math.pow(1024,2))/10)}MB ${Object.values(chunks.world).filter((c:{mesh:any})=>!!c.mesh).length}/${Object.values(chunks.world).length}`;
+    ${(Math.round((performance as any).memory.usedJSHeapSize * 10 / Math.pow(1024, 2)) / 10)}MB ${Object.values(chunks.world).filter((c: { mesh: any }) => !!c.mesh).length}/${Object.values(chunks.world).length}`;
 
 
 
@@ -348,19 +436,34 @@ function lookingAt() {
   raycaster.setFromCamera(pointer, camera);
 
   // Assuming you know which mesh holds the blocks:
-  let intersects = raycaster.intersectObjects(chunks.clickableMeshesNearby(camera.position), false); // or scene.children if still scanning all
+  let intersects = raycaster.intersectObjects(chunks.clickableMeshesNearby(camera.position).concat(characters.clickableMeshesNearby(camera.position)), true); // or scene.children if still scanning all
 
   intersects = intersects.filter(hit => hit.distance <= 10);
 
   if (intersects.length === 0) {
     wireframeTarget.visible = false;
     wireframeDestination.visible = false;
+    pointerCharacter = null;
     pointerTarget = null;
     pointerDestination = null;
     return;
   }
 
   const hit = intersects[0];
+
+  let character = hit.object;
+  while (character && typeof character.name == 'string' && character.name == '') {
+    character = character.parent;
+  }
+
+  if (character && typeof character.name == 'string' && character.name != '' && character.name != 'chunk') {
+    pointerCharacter = character
+    pointerTarget = null;
+    pointerDestination = null;
+    return
+  } else {
+    pointerCharacter = null
+  }
 
   const hitPoint = hit.point;
   const faceNormal = hit.face?.normal ?? new THREE.Vector3();
@@ -403,7 +506,7 @@ function lookingAt() {
 
 
 
-const dark=Blockly.Theme.defineTheme('dark', {
+const dark = Blockly.Theme.defineTheme('dark', {
   name: 'dark',
   base: Blockly.Themes.Classic,
   componentStyles: {
