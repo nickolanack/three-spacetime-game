@@ -82,45 +82,101 @@ export class BlockAtlas extends EventEmitter<MyEvents> {
         buildAtlas = () => {
             const tileSize = 48; // assume square images
             const canvas = document.createElement('canvas');
-            // document.body.appendChild(canvas)
+            //document.body.appendChild(canvas)
 
-            const insetX = 4 / (tileSize * countSets);
-            const insetY = 4 / (tileSize * 6);
+            const insetX = 1 / (tileSize * countSets);
+            const insetY = 1 / (tileSize * countFaces);
 
             canvas.id = 'mesh-atlas';
-            canvas.width = tileSize * countSets
-            canvas.height = tileSize * countFaces
+
+            const padd = 10;
+
+            const slotW = tileSize + 2*padd
+            const slotH = tileSize + 2*padd
+
+            const width = slotW * countSets;
+            const height = slotH * countFaces;
+            canvas.width = width;
+            canvas.height = height;
 
             const ctx = canvas.getContext('2d')!;
             const uvs = new Map<string, THREE.Vector4>();
             const faces: Array<string> = [];
 
+
             for (let index = 0; index < images.length; index++) {
-                let i = index % countFaces;
+                let faceIndex = index % countFaces;
+
 
                 let j = Math.floor(index / countFaces);
                 let setIndex = j;
-                ctx.drawImage(images[index], j * tileSize, i * tileSize, tileSize, tileSize);
 
-                if (j != this.getTypeId('water') - 1) {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-                    ctx.lineWidth = 1;
-                    let inset = 4;
-                    ctx.strokeRect(j * tileSize + inset, i * tileSize + inset, tileSize - 2 * inset, tileSize - 2 * inset);
-                }
+                let pj = padd * (1 + 2 * setIndex)
+                let pi = padd * (1 + 2 * faceIndex)
 
-                const v = i / countFaces;
+                const x = setIndex * slotW + padd;
+                const y = faceIndex * slotH + padd;
 
-                const faceId = `${setIndex}.${i}`;
+                ctx.drawImage(images[index], x, y, tileSize, tileSize);
+                ctx.drawImage(images[index],
+                    0, 0, tileSize, 1,        // take the first row of pixels
+                    x, y - padd, tileSize, padd // draw it just above the tile
+                );
+
+                // --- Bottom edge
+                ctx.drawImage(images[index],
+                    0, tileSize - 1, tileSize, 1,    // last row
+                    x, y + tileSize, tileSize, padd   // below the tile
+                );
+
+                // --- Left edge
+                ctx.drawImage(images[index],
+                    0, 0, 1, tileSize,     // first column
+                    x - padd, y, padd, tileSize
+                );
+
+                // --- Right edge
+                ctx.drawImage(images[index],
+                    tileSize - 1, 0, 1, tileSize,    // last column
+                    x + tileSize, y, padd, tileSize
+                );
+
+                // --- Corners (optional but cleaner for mipmaps)
+                ctx.drawImage(images[index],
+                    0, 0, 1, 1,
+                    x - padd, y - padd, padd, padd // top-left
+                );
+                ctx.drawImage(images[index],
+                    tileSize - 1, 0, 1, 1,
+                    x + tileSize, y - padd, padd, padd // top-right
+                );
+                ctx.drawImage(images[index],
+                    0, tileSize - 1, 1, 1,
+                    x - padd, y + tileSize, padd, padd // bottom-left
+                );
+                ctx.drawImage(images[index],
+                    tileSize - 1, tileSize - 1, 1, 1,
+                    x + tileSize, y + tileSize, padd, padd // bottom-right
+                );
+
+                // if (j != this.getTypeId('water') - 1) {
+                //     ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                //     ctx.lineWidth = 1;
+                //     let inset = 4;
+                //     ctx.strokeRect(x+inset, y+inset, tileSize - 2 * inset, tileSize - 2 * inset);
+                // }
+
+
+                const faceId = `${setIndex}.${faceIndex}`;
                 faces.push(faceId);
 
-                const uMIn = setIndex / countSets;
-                const uMax = (1 + setIndex) / countSets
+                const uMin = x / width;
+                const uMax = (x + tileSize) / width;
 
-                const vMax = 1 - v
-                const vMin = vMax - 1 / countFaces
+                const vMin = 1 - (y + tileSize) / height;
+                const vMax = 1 - y / height;
 
-                uvs.set(faceId, new THREE.Vector4(uMIn + insetX, vMin + insetY, uMax - insetX, vMax - insetY)); // (uMin, vMin, uMax, vMax)
+                uvs.set(faceId, new THREE.Vector4(uMin + insetX, vMin + insetY, uMax - insetX, vMax - insetY)); // (uMin, vMin, uMax, vMax)
             }
 
             const atlas = new THREE.CanvasTexture(canvas);
@@ -174,13 +230,13 @@ export class BlockAtlas extends EventEmitter<MyEvents> {
     }
 
 
-    createTexturedBoxVariation(type: number|string, seed: number) {
+    createTexturedBoxVariation(type: number | string, seed: number) {
 
-        if(typeof type=='string'){
-            type=this.getTypeId(type);
+        if (typeof type == 'string') {
+            type = this.getTypeId(type);
         }
 
-        if(typeof type !='number'){
+        if (typeof type != 'number') {
             throw 'Invalid';
         }
 
@@ -197,13 +253,13 @@ export class BlockAtlas extends EventEmitter<MyEvents> {
         return this.createTexturedBox(type + 1)
 
     }
-    createTexturedBox(type: number|string) {
+    createTexturedBox(type: number | string) {
 
-        if(typeof type=='string'){
-            type=this.getTypeId(type);
+        if (typeof type == 'string') {
+            type = this.getTypeId(type);
         }
 
-        if(typeof type !='number'){
+        if (typeof type != 'number') {
             throw 'Invalid';
         }
 
@@ -243,44 +299,7 @@ export class BlockAtlas extends EventEmitter<MyEvents> {
     }
 
 
-    renderStaticCubePreview(type: number, container) {
-        // Set up scene
-        const scene = new THREE.Scene();
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(2, 4, 3);
-        scene.add(directionalLight);
-
-
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
-        camera.position.z = 3;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(256, 256);
-        container.appendChild(renderer.domElement);
-
-        // Create cube
-        const geometry = this.createTexturedBox(type);
-        const material = new THREE.MeshStandardMaterial({
-            map: this.atlas,
-            transparent: true,
-            color: 0xffffff,
-            roughness: 0.5,
-            metalness: 0.1
-
-        });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
-
-        // Set preset rotation (example: isometric-style)
-        cube.rotation.set(THREE.MathUtils.degToRad(35), THREE.MathUtils.degToRad(45), 0);
-
-        // Render once
-        renderer.render(scene, camera);
-    }
 
 
 
