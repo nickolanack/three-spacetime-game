@@ -4,6 +4,9 @@ import { PixelMesh } from './PixelMesh';
 
 export class Item {
 
+    scale: number | ((i, rand) => number) = (i,rand) => 2 + Math.floor(rand() * 3 - 1);
+    rotation: {x:number, y:number, z:number} | ((i, rand) => {x:number, y:number, z:number}) = (i, rand) =>{ return {x:0, y:0, z:0}; }
+
     constructor(scene, asset: string, x: number, y: number, z: number, depth?: number, opt?: any) {
 
         if (typeof depth != 'number') {
@@ -22,10 +25,17 @@ export class Item {
 
         (async () => {
 
-            const {mesh} = await (new PixelMesh()).createFromAsset(asset, depth);
+            const { mesh } = await (new PixelMesh()).createFromAsset(asset, depth);
             const rand = this._mulberry32(parseInt(`${x}${y}${z}`));
 
-            const scale = 2 + Math.floor(rand() * 3 - 1);
+            let scale = 1;
+            if (typeof this.scale == 'function') {
+                scale = this.scale(0, rand)
+            } else {
+                scale = this.scale;
+            }
+
+
 
             mesh.scale.set(scale / 128, scale / 128, scale / 128)
             mesh.position.set(x, y, z);
