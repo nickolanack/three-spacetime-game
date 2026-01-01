@@ -63,25 +63,53 @@ export class Inventory {
         this.lastType = type;
         this._update();
 
+        this.playSound('add');
+
+    }
+
+    async playSound(clip:string){
+
+        if(clip=='add'){
+            const audio = new Audio('sounds/handleCoins2.ogg');
+            audio.volume=0.5;
+            audio.play();
+            return
+        }
+
+        const audio = new Audio('sounds/impactWood_medium_000.ogg');
+        audio.play();
+
     }
 
 
     removeItem() {
 
+        
+
         let type=-1;
 
+        if(this.inifinityItems){
+            if(this.items[this.selectedItem]){
+                type=this.items[this.selectedItem].type;
+            }
+        }else{
         
-        if(this.items[this.selectedItem]){
-            type=this.items[this.selectedItem].type;
-            this.items[this.selectedItem].count--;
-            if(this.items[this.selectedItem].count==0){
-            this.items[this.selectedItem]=null;
+            if(this.items[this.selectedItem]){
+                type=this.items[this.selectedItem].type;
+                this.items[this.selectedItem].count--;
+                if(this.items[this.selectedItem].count==0){
+                this.items[this.selectedItem]=null;
+                }
             }
         }
+            
+
         
 
-
         this._update()
+
+        this.playSound('place');
+
         return type;
 
     }
