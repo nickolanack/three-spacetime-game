@@ -27,7 +27,7 @@ export class Controls {
 
     lastForwardTap = 0
     isRunning = false;
-    isInWater = false;
+    isInLiquid = false;
 
     gravity = -30;
     jumpStrength = 10;
@@ -157,7 +157,7 @@ export class Controls {
                 }
             }
 
-            if (event.code === 'Space' && (this.isOnGround || this.isInWater)) {
+            if (event.code === 'Space' && (this.isOnGround || this.isInLiquid)) {
 
                 this.velocityY = this.jumpStrength;
                 this.isOnGround = false;
@@ -239,7 +239,7 @@ export class Controls {
             speed = speed / 2;
         }
 
-        if (this.isInWater) {
+        if (this.isInLiquid) {
             speed = this.playerSpeed / 3;
         }
 
@@ -277,11 +277,11 @@ export class Controls {
         let { g, type } = this.chunks.fromWorld(this.camera.position);
 
 
-        if (type == 'water' && (!this.isInWater) && (!this.isOnGround)) {
+        if (type == 'water' && (!this.isInLiquid) && (!this.isOnGround)) {
             this.velocityY = 0
         }
 
-        this.isInWater = type == 'water';
+        this.isInLiquid = type == 'water';
 
 
 
@@ -314,7 +314,7 @@ export class Controls {
 
         if (!this.isOnGround) {
             let gravity = this.gravity;
-            if (this.isInWater && this.velocityY < 0) {
+            if (this.isInLiquid && this.velocityY < 0) {
                 gravity = gravity / 20;
             }
             this.velocityY += gravity * delta;
