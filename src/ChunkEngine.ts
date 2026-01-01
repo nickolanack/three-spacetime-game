@@ -10,7 +10,7 @@ type BlockType = number; // 0 = air, 1 = dirt, 2 = grass
 import BlockFaces from './blocks.json';
 
 
-type Chunk = number[][][] & {
+export type Chunk = number[][][] & {
     mesh?: THREE.Mesh;
     water?: THREE.Mesh;
     leaves?: THREE.Mesh;
@@ -25,6 +25,9 @@ import { Generators } from './Generators';
 
 import EventEmitter from 'eventemitter3';
 import { ChunkLoader } from './ChunkLoader';
+import { Door } from './Door';
+import { BiomeGenerator } from './BiomeGenerator';
+
 type MyEvents = {
     'activechunk:update': { from: string; to: string };
 };
@@ -164,6 +167,8 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
             return this.world[key].mesh
         }).filter(mesh => !!mesh).concat(neighbours.map(({ key }) => {
             return this.world[key].leaves
+        }).filter(mesh => !!mesh)).concat(neighbours.map(({ key }) => {
+            return this.world[key].water
         }).filter(mesh => !!mesh));
 
     }
@@ -176,202 +181,10 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
     }
 
     async generateChunkXZTerrain(cx: number, cz: number) {
-
-
-        const chunk: Chunk = this.generateEmptyChunk()
-        this.world[`${cx},0,${cz}`] = chunk;
-
-
-        this.generator.raise(cx, cz, {
-            height: 3,
-            type: 'mantle'
-        })
-
-        const seed = 25;
-
-        this.generator.addPerlin(cx, cz, {
-            seed: seed,
-            scale: 0.005,
-            height: 5,
-            type: 'mantle'
-        })
-
-
-
-        this.generator.addPerlin(cx, cz, {
-            seed: seed,
-            scale: 0.005,
-            height: 22,
-            type: 'stone'
-        })
-        this.generator.raise(cx, cz, {
-            height: 1,
-            type: 'dirt'
-        })
-
-
-        this.generator.insetPerlin(cx, cz, {
-            seed: seed + 1,
-            scale: 0.1,
-            height: 13,
-            sub: 4,
-            type: 'lava'
-        })
-
-        this.generator.raise(cx, cz, {
-            height: 1,
-            type: 'dirt'
-        })
-
-        this.generator.raise(cx, cz, {
-            height: 1,
-            type: 'dirt'
-        })
-
-        this.generator.addPerlin(cx, cz, {
-            seed: seed,
-            scale: 0.005,
-            height: 3,
-            type: 'stone'
-        })
-
-
-        for (let i = 0; i < 1; i++) {
-            this.generator.insetPerlin(cx, cz, {
-                seed: 1 * i,
-                scale: 0.1,
-                height: 11,
-                sub: 4,
-                type: 'gold'
-            })
-
-            this.generator.insetPerlin(cx, cz, {
-                seed: 2 * i,
-                scale: 0.1,
-                height: 11,
-                sub: 5,
-                type: 'diamond'
-            })
-
-
-            this.generator.insetPerlin(cx, cz, {
-                seed: 3 * i,
-                scale: 0.1,
-                height: 11,
-                sub: 4,
-                type: 'gem'
-            })
-
-
-
-        }
-
-        this.generator.addPerlin(cx, cz, {
-            seed: seed,
-            scale: 0.005,
-            height: 20,
-            sub: 14,
-            extrude: 4,
-            type: 'stone'
-        })
-
-        this.generator.addPerlin(cx, cz, {
-            seed: 99,
-            scale: 0.005,
-            height: 18,
-            sub: 15,
-            extrude: 2,
-            type: 'stone'
-        })
-
-
-
-        this.generator.add(cx, cz, {
-            height: (wy) => {
-                return wy < 10 ? 1 : 0;
-            },
-            type: 'mantle'
-        })
-
-        this.generator.add(cx, cz, {
-            height: (wy) => {
-                return wy > 12 ? 1 : 0;
-            },
-            type: 'dirt'
-        })
-
-        this.generator.add(cx, cz, {
-            height: (wy, type) => {
-                return wy < 11 ? 1 : 0 //||type==this.getTypeId('stone')?
-            },
-            inset: 1,
-            type: 'sand'
-        })
-
-        this.generator.insetPerlin(cx, cz, {
-            seed: 89,
-            scale: 0.2,
-            height: (wy) => {
-                return wy < 11 ? 15 : 0;
-            },
-            sub: 3,
-            type: 'dirt'
-        })
-
-        this.generator.raise(cx, cz, {
-            height: 8,
-            type: 'water'
-        })
-
+        (new BiomeGenerator(this.generator, this.world)).generateChunkXZTerrain(cx, cz)
     }
     async generateChunkXZFeatures(cx: number, cz: number) {
-
-        this.world[`${cx},0,${cz}`].features = true;
-
-        this.generator.addRandom(cx, cz, {
-            probability: 0.03,
-            height: (wy, type) => {
-                return type == this.getTypeId('dirt') ? Math.round(2 + Math.random()) : 0
-            },
-            type: 'wood',
-            ignoreWater: false
-        })
-
-
-        this.generator.addRandom(cx, cz, {
-            probability: 0.03,
-            height: (wy, type) => {
-                return type == this.getTypeId('stone') ? 1 : 0
-            },
-            type: 'slime',
-            ignoreWater: false
-        })
-
-        this.generator.addRandom(cx, cz, {
-            probability: 0.01,
-            height: (wy, type) => {
-                return type == this.getTypeId('dirt') ? Math.round(2 + Math.random()) : 0
-            },
-            type: 'birtch',
-            ignoreWater: false
-        })
-
-
-        this.generator.setLeaves(cx, cz);
-        this.generator.setGrassTop(cx, cz);
-        this.generator.grow('grass', cx, cz, {
-            probability: 0.05,
-        });
-
-        this.generator.grow('wheat', cx, cz, {
-            probability: 0.01,
-        });
-
-        this.generator.growSeaweed(cx, cz, {
-            probability: 0.05,
-        });
-
-
+         (new BiomeGenerator(this.generator, this.world)).generateChunkXZFeatures(cx, cz)
     }
 
 
@@ -447,6 +260,15 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
                         }
 
+                        if (type == this.getTypeId('door_wood_item')) {
+
+                            new Door(assetGeometries, "door.png", x-0.5, y, z+0.5, 10, { maxClones: 0 });
+                            continue;
+
+                        } else {
+
+                        }
+
                         if (type == this.getTypeId('sword_item')) {
 
                             new Item(assetGeometries, 'wood_sword.png', x, y, z, 2, { maxClones: 0, scale: [1, 1] });
@@ -459,8 +281,8 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
 
                         geom.translate(x, y + 0.5, z);
-                        if (type == this.getTypeId('water')) {
-
+                        if (type == this.getTypeId('water')||type == this.getTypeId('lava')) {
+                            geom.scale(1, 0.98, 1);
                             if (y >= this.chunkSize - 1 || chunk[x][y + 1][z] != type) {
                                 // if((!chunk.key)||this.getBlock(chunk.key, x, y+1, z)!=this.getTypeId('water')){
                                 waterGeometries.push(geom)
@@ -473,7 +295,7 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
                         }
 
-                        if (type == this.getTypeId('leaves')) {
+                        if (type == this.getTypeId('leaves_dark')) {
                             leavesGeometries.push(geom)
                             continue;
                         }
@@ -550,6 +372,7 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
         }
         chunk.mesh = mesh;
+        chunk.mesh.name=`chunk`
         chunk.water = water;
         chunk.leaves = leaves;
         chunk.assets = assetGeometries;
@@ -661,10 +484,14 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
         ({ key, x, y, z } = this.resolveBlock(key, x, y, z));
 
-        const chunk = this.world[key];
+        let chunk = this.world[key];
+        const { cx, cy, cz } = this.fromKey(key)
         if (!chunk) {
-            const { cx, cy, cz } = this.fromKey(key)
-            this.buildChunkMesh(this.generateEmptyChunk(), cx, cy, cz);
+            chunk=this.generator.generateEmptyChunk();
+            this.buildChunkMesh(chunk, cx, cy, cz);
+        }
+        if(!chunk.key){
+            this.buildChunkMesh(chunk, cx, cy, cz);
         }
 
 
@@ -696,19 +523,88 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
     }
 
     /**
+     * 
+     * @param type 
+     * @param expected 
+     * @returns boolean
+     * 
+     * example .isTypeOf('wood_dark', 'wood') true
+     * example .isTypeOf(23, 'wood') true
+     */
+    isTypeOf(type: string | number, expected:string):boolean {
+        const id= this.getTypeId(type);
+        const name=this.getTypeName(id);
+        return name==expected || name.split('_').shift()==expected;
+    }
+
+    /**
      * @deprecated
      */
     renderStaticCubePreview(type: number, container) {
-        this.blockAtlas.renderStaticCubePreview(type, container);
+
+
+
+     
+        // Set up scene
+        const scene = new THREE.Scene();
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(2, 4, 3);
+        scene.add(directionalLight);
+
+
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
+        camera.position.z = 3;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(256, 256);
+        container.appendChild(renderer.domElement);
+
+
+
+        if (type == this.getTypeId('door_wood_item')) {
+
+            new Door(scene, "door.png", -0.5, -1, -1, 10, { maxClones: 0 });
+            setTimeout(()=>{
+                renderer.render(scene, camera);
+            }, 1000);
+            
+
+            return;
+
+        }else{
+
+            // Create cube
+            const geometry = this.blockAtlas.createTexturedBox(type);
+            const material = this.blockAtlas.getMaterial()
+
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+
+              // Set preset rotation (example: isometric-style)
+             cube.rotation.set(THREE.MathUtils.degToRad(35), THREE.MathUtils.degToRad(45), 0);
+
+        }
+
+      
+        // Render once
+        renderer.render(scene, camera);
+    
+
     }
 
     render() {
 
 
         this.blockAtlas = new BlockAtlas(BlockFaces);
-        this.blockAtlas.onload(() => {
+        this.blockAtlas.onload(async () => {
 
-            (new ChunkLoader(this)).loadChunks()
+            const loader = new ChunkLoader(this);
+            await loader.loadChunks(5)
+            //  await loader.startUpdatingChunks(10)
 
         });
 
@@ -784,7 +680,7 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
 
         while (y >= 0) {
             let type = this.world[key][x][y][z];
-            if (!(type == this.getTypeId('air') || type == this.getTypeId('water'))) {
+            if (!(type == this.getTypeId('air') || type == this.getTypeId('water')|| type == this.getTypeId('lava'))) {
                 return cy * this.chunkSize + y + 1;
             }
             y--;
@@ -808,7 +704,7 @@ export class ChunkEngine extends EventEmitter<MyEvents> {
      */
     fromCamera(pos: { x: number, y: number, z: number }) {
         const location = this.fromWorld(pos);
-
+        // console.log(pos);
         if (this.current !== location.key) {
             const from = this.current;
             const to = location.key;
