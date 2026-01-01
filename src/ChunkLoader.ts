@@ -10,10 +10,13 @@ export class ChunkLoader {
 
     }
 
-    async loadChunks() {
+    async loadChunks(size?: number) {
 
 
-        const size = 5;
+
+        if (typeof size == 'undefined') {
+            size = 5
+        }
 
 
         const loadInitalTasks = [];
@@ -76,116 +79,144 @@ export class ChunkLoader {
 
         await Promise.all(renderInitialTasks);
 
+    }
+
+    async startUpdatingChunks(size?: number) {
 
 
-        let isUpdating=false;
+        if (typeof size == 'undefined') {
+            size = 5;
+        }
+
+        let delay = 100;
+
+
+        let isUpdating = false;
 
         this.chunks.on('activechunk:update', ({ to }) => {
 
             (async () => {
 
-                if(isUpdating){
+                if (isUpdating) {
                     console.log('skip');
                     return;
                 }
-                isUpdating=true;
-                console.log('update-chunks')
+                isUpdating = true;
 
-                const { cx: _cx, cy, cz: _cz } = this.chunks.fromKey(to)
-
-
-                const loadNewChunkTasks = [];
-                const loadedKeys=[]
+                try {
 
 
-                for (const { key, cx, cy, cz } of this.chunks.getRadialNeighbourChunks(_cx, 0, _cz, size)) { //}.forEach(() => {
+                    console.log('update-chunks')
 
-                    if (cy == 0 && (!!!this.chunks.world[key])) {
-
-                        loadNewChunkTasks.push((async () => {
-
-                            loadedKeys.push(key)
-
-                            const hasBlock = await this.chunks.database.hasItem(`${cx},0,${cz}`);
-                            if (hasBlock) {
-                                await this.chunks.loadChunks(cx, cz);
-                                
-                                return;
-                            }
-                            await this.chunks.generateChunkXZTerrain(cx, cz)
-                        })());
-                    }
-                };
-
-                await Promise.all(loadNewChunkTasks);
+                    const { cx: _cx, cy, cz: _cz } = this.chunks.fromKey(to)
 
 
-                const renderNewChunkTasks = [];
-
-                for (let { key, cx, cy, cz } of this.chunks.getRadialNeighbourChunks(_cx, 0, _cz, size - 1)) { //}.forEach(({ key, cx, cy, cz }) => {
-                    if (cy == 0) {
+                    const loadNewChunkTasks = [];
+                    const loadedKeys = []
 
 
-                        renderNewChunkTasks.push((async () => {
+                    for (const { key, cx, cy, cz } of this.chunks.getRadialNeighbourChunks(_cx, 0, _cz, size)) { //}.forEach(() => {
+
+                        if (cy == 0 && (!!!this.chunks.world[key])) {
+
+                            loadNewChunkTasks.push((async () => {
+
+                                loadedKeys.push(key)
+
+                                const hasBlock = await this.chunks.database.hasItem(`${cx},0,${cz}`);
+                                if (hasBlock) {
+                                    await this.chunks.loadChunks(cx, cz);
+                                    await new Promise(resolve => setTimeout(resolve, delay));
+                                    return;
+                                }
+                                await this.chunks.generateChunkXZTerrain(cx, cz)
+                                await new Promise(resolve => setTimeout(resolve, delay));
+                            })());
+                        }
+                    };
+
+                    await Promise.all(loadNewChunkTasks);
 
 
-                            const hasBlock = await this.chunks.database.hasItem(`${cx},0,${cz}`);
-                            let key = `${cx},${cy},${cz}`;
-                            if (hasBlock&&loadedKeys.indexOf(key)>=0) {
+                    const renderNewChunkTasks = [];
+
+                    for (let { key, cx, cy, cz } of this.chunks.getRadialNeighbourChunks(_cx, 0, _cz, size - 1)) { //}.forEach(({ key, cx, cy, cz }) => {
+                        if (cy == 0) {
+
+
+                            renderNewChunkTasks.push((async () => {
+
+
+                                const hasBlock = await this.chunks.database.hasItem(`${cx},0,${cz}`);
+                                let key = `${cx},${cy},${cz}`;
+                                if (hasBlock && loadedKeys.indexOf(key) >= 0) {
+                                    while (this.chunks.world[key]) {
+                                        try {
+                                            this.chunks.buildChunkMesh(this.chunks.world[key], cx, cy, cz);
+                                        } catch (e) {
+                                            console.error(e)
+                                        }
+                                        cy++;
+                                        key = `${cx},${cy},${cz}`;
+                                        await new Promise(resolve => setTimeout(resolve, delay));
+                                    }
+                                    return;
+                                }
+
+
+                                let chunk = this.chunks.world[key];
+                                if (!chunk.features) {
+                                    await this.chunks.generateChunkXZFeatures(cx, cz)
+                                    await new Promise(resolve => setTimeout(resolve, delay));
+                                    while (this.chunks.world[key]) {
+                                        this.chunks.buildChunkMesh(this.chunks.world[key], cx, cy, cz);
+                                        this.chunks.database.setItem(key, this.chunks.getChunkData(key))
+                                        cy++;
+                                        key = `${cx},${cy},${cz}`;
+                                        await new Promise(resolve => setTimeout(resolve, delay));
+                                    }
+                                }
+
+                            })());
+                        }
+                    };
+
+                    await Promise.all(renderNewChunkTasks);
+
+
+                    const unloadOldChunkTasks = [];
+
+
+                    this.chunks.getRadialOutsideChunks(_cx, 0, _cz, size * 2).forEach(({ key, cx, cy, cz }) => {
+
+                        if (cy == 0) {
+
+                            unloadOldChunkTasks.push((async () => {
+
+                                key = `${cx},${0},${cz}`;
                                 while (this.chunks.world[key]) {
-                                    this.chunks.buildChunkMesh(this.chunks.world[key], cx, cy, cz);
+                                    this.chunks.unloadChunk(key);
                                     cy++;
                                     key = `${cx},${cy},${cz}`;
+
+                                    await new Promise(resolve => setTimeout(resolve, delay));
                                 }
-                                return;
-                            }
+
+                            })());
+                        }
+
+                    });
+
+                    await Promise.all(unloadOldChunkTasks);
+
+                } catch (e) { 
+                    console.log(e)
+                }
 
 
-                            let chunk = this.chunks.world[key];
-                            if (!chunk.features) {
-                                await this.chunks.generateChunkXZFeatures(cx, cz)
-                                while (this.chunks.world[key]) {
-                                    this.chunks.buildChunkMesh(this.chunks.world[key], cx, cy, cz);
-                                    this.chunks.database.setItem(key, this.chunks.getChunkData(key))
-                                    cy++;
-                                    key = `${cx},${cy},${cz}`;
-                                }
-                            }
-
-                        })());
-                    }
-                };
-
-                await Promise.all(renderNewChunkTasks);
+                isUpdating = false;
 
 
-                const unloadOldChunkTasks = [];
-
-
-                this.chunks.getRadialOutsideChunks(_cx, 0, _cz, size * 2).forEach(({ key, cx, cy, cz }) => {
-
-                    if (cy == 0) {
-
-                        unloadOldChunkTasks.push((async () => {
-
-                            key = `${cx},${0},${cz}`;
-                            while (this.chunks.world[key]) {
-                                this.chunks.unloadChunk(key);
-                                cy++;
-                                key = `${cx},${cy},${cz}`;
-                            }
-
-                        }));
-                    }
-
-                });
-
-                unloadOldChunkTasks.forEach(async (fn)=>{
-                    await fn();
-                });
-
-
-                isUpdating=false;
 
             })()
 
